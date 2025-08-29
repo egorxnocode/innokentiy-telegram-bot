@@ -6,18 +6,18 @@
 import os
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения из файла config.env
+# Загружаем переменные окружения из файла .env
 # Пробуем загрузить из разных возможных местоположений
 import pathlib
-config_paths = [
-    'config.env',  # Локально
-    '/app/config.env',  # В Docker контейнере
-    pathlib.Path(__file__).parent / 'config.env'  # Относительно этого файла
+env_paths = [
+    '.env',  # Локально
+    '/app/.env',  # В Docker контейнере
+    pathlib.Path(__file__).parent / '.env'  # Относительно этого файла
 ]
 
-for config_path in config_paths:
-    if pathlib.Path(config_path).exists():
-        load_dotenv(config_path)
+for env_path in env_paths:
+    if pathlib.Path(env_path).exists():
+        load_dotenv(env_path)
         break
 else:
     # Если файл не найден, пытаемся загрузить из переменных окружения Docker

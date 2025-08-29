@@ -3,8 +3,6 @@ services:
     build: .
     container_name: innokentiy-bot
     restart: unless-stopped
-    env_file:
-      - config.env
     environment:
       # Telegram Bot
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
@@ -31,7 +29,7 @@ services:
       
     volumes:
       - ./logs:/app/logs
-      - ./config.env:/app/config.env:ro
+      - ./.env:/app/.env:ro
     
     networks:
       - n8n_default
