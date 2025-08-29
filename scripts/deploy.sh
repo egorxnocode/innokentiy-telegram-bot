@@ -51,9 +51,10 @@ if ! command -v docker-compose &> /dev/null; then
 fi
 
 # Проверка конфигурации
-if [[ ! -f "config.env" ]]; then
-    log_error "Файл config.env не найден"
-    log_info "Скопируйте config.env.example в config.env и заполните переменные"
+if [[ ! -f ".env" ]]; then
+    log_error "Файл .env не найден"
+    log_info "Скопируйте env.example в .env и заполните переменные"
+    log_info "Или используйте: ./scripts/setup-env.sh"
     exit 1
 fi
 
@@ -61,21 +62,32 @@ fi
 log_info "📋 Проверяем конфигурацию..."
 required_vars=(
     "TELEGRAM_BOT_TOKEN"
-    "SUPABASE_URL"
     "SUPABASE_KEY"
-    "OPENAI_API_KEY"
-    "N8N_NICHE_WEBHOOK_URL"
-    "N8N_TOPIC_WEBHOOK_URL"
-    "N8N_POST_WEBHOOK_URL"
     "ADMIN_CHAT_ID"
 )
 
-source config.env
+optional_vars=(
+    "OPENAI_API_KEY"
+    "N8N_NICHE_WEBHOOK_URL"
+    "N8N_TOPIC_WEBHOOK_URL" 
+    "N8N_POST_WEBHOOK_URL"
+)
 
+source .env
+
+# Проверяем обязательные переменные
 for var in "${required_vars[@]}"; do
-    if [[ -z "${!var}" ]]; then
-        log_error "Переменная $var не задана в config.env"
+    if [[ -z "${!var}" || "${!var}" == "your_"* ]]; then
+        log_error "Переменная $var не задана в .env"
+        log_info "Используйте: ./scripts/setup-env.sh для настройки"
         exit 1
+    fi
+done
+
+# Предупреждаем о необязательных переменных
+for var in "${optional_vars[@]}"; do
+    if [[ -z "${!var}" || "${!var}" == "your_"* ]]; then
+        log_warning "Переменная $var не настроена (необязательная)"
     fi
 done
 

@@ -66,8 +66,9 @@ case $RESTART_TYPE in
         docker-compose down
         
         # Проверка конфигурации
-        if [[ ! -f "config.env" ]]; then
-            log_error "Файл config.env не найден"
+        if [[ ! -f ".env" ]]; then
+            log_error "Файл .env не найден"
+            log_info "Используйте: ./scripts/setup-env.sh"
             exit 1
         fi
         
@@ -89,7 +90,7 @@ case $RESTART_TYPE in
         echo "Примеры:"
         echo "  ./scripts/restart.sh soft    # Быстрый перезапуск"
         echo "  ./scripts/restart.sh hard    # После изменения кода"
-        echo "  ./scripts/restart.sh config  # После изменения config.env"
+        echo "  ./scripts/restart.sh config  # После изменения .env"
         exit 0
         ;;
 esac

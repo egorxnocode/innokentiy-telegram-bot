@@ -112,15 +112,16 @@ fi
 
 # Проверка конфигурации
 echo -e "\n${CYAN}⚙️ Конфигурация:${NC}"
-if [[ -f "config.env" ]]; then
-    echo "  ✅ Файл config.env найден"
+if [[ -f ".env" ]]; then
+    echo "  ✅ Файл .env найден"
     
     # Проверка основных переменных
-    source config.env
+    source .env
     vars_check=(
         "TELEGRAM_BOT_TOKEN:Telegram Bot Token"
-        "SUPABASE_URL:Supabase URL"
+        "SUPABASE_KEY:Supabase Key"
         "ADMIN_CHAT_ID:Admin Chat ID"
+        "OPENAI_API_KEY:OpenAI API Key"
         "N8N_NICHE_WEBHOOK_URL:N8N Niche Webhook"
         "N8N_TOPIC_WEBHOOK_URL:N8N Topic Webhook"
         "N8N_POST_WEBHOOK_URL:N8N Post Webhook"
@@ -130,14 +131,15 @@ if [[ -f "config.env" ]]; then
         var_name="${var_check%%:*}"
         var_desc="${var_check##*:}"
         
-        if [[ -n "${!var_name}" ]]; then
+        if [[ -n "${!var_name}" && "${!var_name}" != "your_"* ]]; then
             echo "  ✅ $var_desc настроен"
         else
             echo "  ❌ $var_desc не настроен"
         fi
     done
 else
-    echo "  ❌ Файл config.env не найден"
+    echo "  ❌ Файл .env не найден"
+    echo "  💡 Используйте: ./scripts/setup-env.sh"
 fi
 
 # Проверка файлов
