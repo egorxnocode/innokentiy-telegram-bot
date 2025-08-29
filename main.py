@@ -70,11 +70,11 @@ class BotManager:
         except Exception as e:
             logger.error(f"Ошибка в планировщике: {e}")
     
-    def start_bot(self):
-        """Запуск бота в отдельном потоке"""
+    async def start_bot(self):
+        """Запуск бота асинхронно"""
         try:
             logger.info("Запуск Telegram бота...")
-            self.bot.run_sync()
+            await self.bot.run()
         except Exception as e:
             logger.error(f"Ошибка в боте: {e}")
     
@@ -102,16 +102,14 @@ class BotManager:
         loop = asyncio.get_event_loop()
         health_future = loop.run_in_executor(self.executor, self.start_health_server)
         
-        # Запускаем бота в отдельном потоке
-        bot_future = loop.run_in_executor(self.executor, self.start_bot)
-        
-        # Запускаем планировщик в текущем цикле событий
-        scheduler_future = self.start_scheduler()
+        # Создаем задачи для бота и планировщика
+        bot_task = asyncio.create_task(self.start_bot())
+        scheduler_task = asyncio.create_task(self.start_scheduler())
         
         try:
             # Ждем завершения любой из задач
             done, pending = await asyncio.wait(
-                [bot_future, scheduler_future, health_future],
+                [bot_task, scheduler_task, health_future],
                 return_when=asyncio.FIRST_COMPLETED
             )
             
@@ -139,6 +137,12 @@ class BotManager:
         
         # Останавливаем health check сервер
         self.stop_health_server()
+        
+        # Останавливаем бота
+        try:
+            await self.bot.stop()
+        except Exception as e:
+            logger.error(f"Ошибка при остановке бота: {e}")
         
         # Останавливаем планировщик
         scheduler.stop()

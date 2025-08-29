@@ -869,16 +869,37 @@ class TelegramBot:
     async def run(self):
         """Запуск бота"""
         logger.info("Запуск Telegram бота...")
-        await self.app.initialize()
-        await self.app.start()
-        await self.app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-        # Ждем до получения сигнала остановки
-        await self.app.updater.idle()
+        try:
+            await self.app.initialize()
+            await self.app.start()
+            await self.app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+            # Ждем до получения сигнала остановки
+            await self.app.updater.idle()
+        except Exception as e:
+            logger.error(f"Ошибка в async run: {e}")
+        finally:
+            if self.app.updater.running:
+                await self.app.updater.stop()
+            if hasattr(self.app, '_initialized') and self.app._initialized:
+                await self.app.stop()
+                await self.app.shutdown()
     
     def run_sync(self):
         """Синхронный запуск бота для использования в executor"""
         logger.info("Запуск Telegram бота...")
         self.app.run_polling(allowed_updates=Update.ALL_TYPES)
+    
+    async def stop(self):
+        """Остановка бота"""
+        try:
+            if hasattr(self.app, 'updater') and self.app.updater.running:
+                await self.app.updater.stop()
+            if hasattr(self.app, '_initialized') and self.app._initialized:
+                await self.app.stop()
+                await self.app.shutdown()
+            logger.info("Бот остановлен")
+        except Exception as e:
+            logger.error(f"Ошибка при остановке бота: {e}")
 
 # Создаем и запускаем бота
 if __name__ == "__main__":
