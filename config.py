@@ -79,7 +79,8 @@ NICHE_CONFIRMATION_KEYBOARD = [
 ]
 
 MAIN_MENU_KEYBOARD = [
-    ['👤 Профиль']
+    ['💡 Предложи мне тему', '📝 Написать пост'],
+    ['👤 Профиль', '❓ Помощь']
 ]
 
 PROFILE_KEYBOARD = [

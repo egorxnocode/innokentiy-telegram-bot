@@ -76,10 +76,25 @@ class TelegramBot:
             self.handle_voice_message
         ))
         
-        # Обработчик кнопок главного меню
+        # Обработчики кнопок главного меню
         self.app.add_handler(MessageHandler(
             filters.Regex("^👤 Профиль$"),
             self.profile_command
+        ))
+        
+        self.app.add_handler(MessageHandler(
+            filters.Regex("^💡 Предложи мне тему$"),
+            self.suggest_topic_command
+        ))
+        
+        self.app.add_handler(MessageHandler(
+            filters.Regex("^📝 Написать пост$"),
+            self.write_post_command
+        ))
+        
+        self.app.add_handler(MessageHandler(
+            filters.Regex("^❓ Помощь$"),
+            self.help_command
         ))
         
         # Обработчик ошибок
@@ -527,16 +542,114 @@ class TelegramBot:
                 remaining_posts=limit_info.get('remaining_posts', 10)
             )
             
+            # Создаем клавиатуру главного меню
+            main_keyboard = ReplyKeyboardMarkup(
+                MAIN_MENU_KEYBOARD,
+                resize_keyboard=True,
+                one_time_keyboard=False
+            )
+            
             await update.message.reply_text(
                 profile_text,
                 parse_mode='HTML',
-                reply_markup=keyboard
+                reply_markup=main_keyboard
             )
         
         except Exception as e:
             logger.error(f"Ошибка в profile_command: {e}")
             await update.message.reply_text(
                 messages.ERROR_DATABASE,
+                parse_mode='HTML'
+            )
+    
+    async def suggest_topic_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Предложить тему для поста"""
+        try:
+            user = update.effective_user
+            telegram_id = user.id
+            
+            # Проверяем, что пользователь зарегистрирован
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
+            )
+            
+            if not current_user:
+                await update.message.reply_text(
+                    "Пользователь не найден. Используйте /start для регистрации.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Создаем клавиатуру главного меню
+            main_keyboard = ReplyKeyboardMarkup(
+                MAIN_MENU_KEYBOARD,
+                resize_keyboard=True,
+                one_time_keyboard=False
+            )
+            
+            # Здесь будет логика предложения темы
+            await update.message.reply_text(
+                "🔄 <b>Генерирую тему для вашей ниши...</b>\n\nПожалуйста, подождите.",
+                parse_mode='HTML',
+                reply_markup=main_keyboard
+            )
+            
+            # TODO: Интеграция с N8N для генерации темы
+            
+        except Exception as e:
+            logger.error(f"Ошибка в suggest_topic_command: {e}")
+            await update.message.reply_text(
+                messages.ERROR_GENERAL,
+                parse_mode='HTML'
+            )
+    
+    async def write_post_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Начать процесс написания поста"""
+        try:
+            user = update.effective_user
+            telegram_id = user.id
+            
+            # Проверяем, что пользователь зарегистрирован
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
+            )
+            
+            if not current_user:
+                await update.message.reply_text(
+                    "Пользователь не найден. Используйте /start для регистрации.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Проверяем лимит постов
+            limit_info = await retry_helper.retry_async_operation(
+                lambda: db.check_user_post_limit(telegram_id)
+            )
+            
+            if limit_info.get('remaining_posts', 0) <= 0:
+                await update.message.reply_text(
+                    "❌ <b>Лимит постов исчерпан</b>\n\nВы израсходовали все посты на эту неделю. Попробуйте завтра или обновите подписку.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Создаем клавиатуру главного меню для возврата
+            main_keyboard = ReplyKeyboardMarkup(
+                MAIN_MENU_KEYBOARD,
+                resize_keyboard=True,
+                one_time_keyboard=False
+            )
+            
+            await update.message.reply_text(
+                "📝 <b>Создание поста</b>\n\n💡 Пришлите мне тему для поста или воспользуйтесь кнопкой \"💡 Предложи мне тему\"",
+                parse_mode='HTML',
+                reply_markup=main_keyboard
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка в write_post_command: {e}")
+            await update.message.reply_text(
+                messages.ERROR_GENERAL,
                 parse_mode='HTML'
             )
     
