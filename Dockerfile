@@ -4,7 +4,13 @@ FROM python:3.11-slim as builder
 # Устанавливаем системные зависимости
 RUN apt-get update && apt-get install -y \
     gcc \
+    python3-dev \
+    libssl-dev \
+    libffi-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Обновляем pip
+RUN pip install --upgrade pip
 
 # Копируем requirements и устанавливаем зависимости
 COPY requirements.txt .
