@@ -16,6 +16,7 @@ from datetime import datetime
 from bot import TelegramBot
 from scheduler import scheduler
 from config import LOG_LEVEL, LOG_FORMAT
+from webhook_server import callback_manager
 
 # Настройка логирования
 logging.basicConfig(
@@ -50,11 +51,12 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         pass
 
 class BotManager:
-    """Менеджер для управления ботом и планировщиком"""
+    """Менеджер для управления ботом, планировщиком и webhook сервером"""
     
     def __init__(self):
         self.bot = TelegramBot()
         self.scheduler_task = None
+        self.webhook_task = None
         self.executor = ThreadPoolExecutor(max_workers=2)
         self.is_running = False
         self.health_server = None
@@ -78,11 +80,26 @@ class BotManager:
         except Exception as e:
             logger.error(f"Ошибка в боте: {e}")
     
+    async def start_webhook_server(self):
+        """Запуск webhook сервера для callback'ов от N8N"""
+        try:
+            logger.info("Запуск webhook сервера для N8N callback'ов...")
+            await callback_manager.start_server(host='0.0.0.0', port=8080)
+            
+            # Сервер запущен, теперь ждем бесконечно
+            while self.is_running:
+                await asyncio.sleep(1)
+                # Периодически очищаем старые запросы
+                callback_manager.cleanup_old_requests()
+                
+        except Exception as e:
+            logger.error(f"Ошибка в webhook сервере: {e}")
+    
     def start_health_server(self):
         """Запуск health check сервера"""
         try:
-            self.health_server = HTTPServer(('0.0.0.0', 8080), HealthCheckHandler)
-            logger.info("Health check сервер запущен на порту 8080")
+            self.health_server = HTTPServer(('0.0.0.0', 8081), HealthCheckHandler)
+            logger.info("Health check сервер запущен на порту 8081")
             self.health_server.serve_forever()
         except Exception as e:
             logger.error(f"Ошибка в health check сервере: {e}")
@@ -94,6 +111,13 @@ class BotManager:
             self.health_server.server_close()
             logger.info("Health check сервер остановлен")
     
+    async def stop_webhook_server(self):
+        """Остановка webhook сервера"""
+        try:
+            await callback_manager.stop_server()
+        except Exception as e:
+            logger.error(f"Ошибка при остановке webhook сервера: {e}")
+    
     async def start(self):
         """Запуск бота, планировщика и health check сервера"""
         self.is_running = True
@@ -102,14 +126,15 @@ class BotManager:
         loop = asyncio.get_event_loop()
         health_future = loop.run_in_executor(self.executor, self.start_health_server)
         
-        # Создаем задачи для бота и планировщика
+        # Создаем задачи для бота, планировщика и webhook сервера
         bot_task = asyncio.create_task(self.start_bot())
         scheduler_task = asyncio.create_task(self.start_scheduler())
+        webhook_task = asyncio.create_task(self.start_webhook_server())
         
         try:
             # Ждем завершения любой из задач
             done, pending = await asyncio.wait(
-                [bot_task, scheduler_task, health_future],
+                [bot_task, scheduler_task, webhook_task, health_future],
                 return_when=asyncio.FIRST_COMPLETED
             )
             
@@ -137,6 +162,9 @@ class BotManager:
         
         # Останавливаем health check сервер
         self.stop_health_server()
+        
+        # Останавливаем webhook сервер
+        await self.stop_webhook_server()
         
         # Останавливаем бота
         try:

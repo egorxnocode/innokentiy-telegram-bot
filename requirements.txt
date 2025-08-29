@@ -5,3 +5,4 @@ requests==2.32.3
 python-dotenv==1.0.1
 validators==0.34.0
 pytz==2024.2
+aiohttp==3.10.5

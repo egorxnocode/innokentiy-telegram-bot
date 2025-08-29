@@ -120,12 +120,13 @@ class VoiceProcessor:
             return None
 
 class NicheDetector:
-    """Класс для определения ниши через N8N webhook"""
+    """Класс для определения ниши через N8N webhook с callback"""
     
     @staticmethod
     async def detect_niche(description: str) -> Optional[str]:
         """
         Отправляет описание деятельности в N8N webhook для определения ниши
+        Использует асинхронную архитектуру с callback
         
         Args:
             description (str): Описание деятельности пользователя
@@ -134,50 +135,39 @@ class NicheDetector:
             Optional[str]: Определенная ниша или None при ошибке
         """
         try:
+            from webhook_server import callback_manager
+            
             payload = {
                 'description': description,
                 'language': 'ru'
             }
             
-            # Отправляем POST запрос в N8N niche webhook
-            logger.info(f"Отправляю запрос в N8N: {N8N_NICHE_WEBHOOK_URL}")
+            logger.info(f"Отправляю асинхронный запрос для определения ниши")
             logger.debug(f"Payload: {payload}")
             
-            response = requests.post(
+            # Отправляем асинхронный запрос в N8N
+            request_id = await callback_manager.send_async_request(
                 N8N_NICHE_WEBHOOK_URL,
-                json=payload,
-                timeout=180,  # 3 минуты таймаут
-                headers={'Content-Type': 'application/json'}
+                payload,
+                "niche"
             )
             
-            logger.info(f"N8N ответил со статусом {response.status_code}")
-            logger.debug(f"Ответ от N8N: {response.text}")
+            # Ждем callback от N8N
+            logger.info(f"Ожидаю callback от N8N для request_id: {request_id}")
+            result = await callback_manager.wait_for_callback(request_id, timeout=180)
             
-            if response.status_code == 200:
-                try:
-                    result = response.json()
-                    logger.debug(f"Parsed JSON from N8N: {result}")
-                    niche = result.get('niche', '').strip()
-                    
-                    if niche:
-                        logger.info(f"Ниша успешно определена: {niche}")
-                        return niche
-                    else:
-                        logger.warning(f"N8N webhook вернул пустую нишу. Результат: {result}")
-                        return None
-                except ValueError as e:
-                    logger.error(f"N8N вернул некорректный JSON: {response.text}. Ошибка: {e}")
+            if result and result.get('success'):
+                niche = result.get('niche', '').strip()
+                if niche:
+                    logger.info(f"Ниша успешно определена: {niche}")
+                    return niche
+                else:
+                    logger.warning("N8N вернул пустую нишу через callback")
                     return None
             else:
-                logger.error(f"N8N webhook вернул статус {response.status_code}: {response.text}")
+                logger.error("Не получен callback от N8N или произошла ошибка")
                 return None
                 
-        except requests.exceptions.Timeout:
-            logger.error("Таймаут при обращении к N8N webhook")
-            return None
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Ошибка запроса к N8N webhook: {e}")
-            return None
         except Exception as e:
             logger.error(f"Неожиданная ошибка при определении ниши: {e}")
             return None
