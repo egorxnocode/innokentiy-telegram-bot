@@ -183,11 +183,8 @@ class TelegramBot:
                 elif state == BotStates.REGISTERED:
                     await self.handle_registered_user_message(update, context, text)
                 else:
-                    # Неизвестное состояние - отправляем в начало
-                    await update.message.reply_text(
-                        "Используйте /start для начала работы",
-                        parse_mode='HTML'
-                    )
+                    # Неизвестное состояние - показываем главное меню
+                    await self.show_main_menu(update, context)
         
         except Exception as e:
             logger.error(f"Ошибка в handle_text_message: {e}")
@@ -614,7 +611,7 @@ class TelegramBot:
         )
         
         await update.message.reply_text(
-            "<b>🏠 Главное меню</b>\n\nВыберите действие:",
+            "Добро пожаловать! Используйте кнопки меню ниже.",
             parse_mode='HTML',
             reply_markup=keyboard
         )
@@ -652,7 +649,12 @@ class TelegramBot:
     
     async def handle_registered_user_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Обработка сообщений от зарегистрированных пользователей"""
-        # Пока что просто показываем главное меню
+        # Проверяем, не является ли это кнопкой главного меню
+        if text == "👤 Профиль":
+            # Эта кнопка обрабатывается отдельным handler'ом, не дублируем
+            return
+        
+        # Для остальных сообщений показываем главное меню
         await self.show_main_menu(update, context)
     
     async def handle_suggest_topic(self, query_or_update, context: ContextTypes.DEFAULT_TYPE):
