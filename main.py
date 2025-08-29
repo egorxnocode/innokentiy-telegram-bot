@@ -65,7 +65,8 @@ class BotManager:
         try:
             logger.info("Запуск планировщика напоминаний...")
             self.scheduler_task = scheduler.start()
-            await self.scheduler_task
+            if self.scheduler_task:
+                await self.scheduler_task
         except Exception as e:
             logger.error(f"Ошибка в планировщике: {e}")
     
@@ -73,7 +74,7 @@ class BotManager:
         """Запуск бота в отдельном потоке"""
         try:
             logger.info("Запуск Telegram бота...")
-            self.bot.run()
+            self.bot.run_sync()
         except Exception as e:
             logger.error(f"Ошибка в боте: {e}")
     

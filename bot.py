@@ -866,12 +866,22 @@ class TelegramBot:
         else:
             logger.error(f"Необработанная ошибка: {context.error}")
     
-    def run(self):
+    async def run(self):
         """Запуск бота"""
+        logger.info("Запуск Telegram бота...")
+        await self.app.initialize()
+        await self.app.start()
+        await self.app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        # Ждем до получения сигнала остановки
+        await self.app.updater.idle()
+    
+    def run_sync(self):
+        """Синхронный запуск бота для использования в executor"""
         logger.info("Запуск Telegram бота...")
         self.app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 # Создаем и запускаем бота
 if __name__ == "__main__":
+    import asyncio
     bot = TelegramBot()
-    bot.run()
+    asyncio.run(bot.run())
