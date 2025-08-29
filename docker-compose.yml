@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  telegram-bot:
+    build: .
+    container_name: innokentiy-bot
+    restart: unless-stopped
+    environment:
+      # Telegram Bot
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      
+      # Supabase (внешний контейнер)
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      
+      # OpenAI
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
+      # N8N Webhooks (внешний контейнер)
+      - N8N_NICHE_WEBHOOK_URL=${N8N_NICHE_WEBHOOK_URL}
+      - N8N_TOPIC_WEBHOOK_URL=${N8N_TOPIC_WEBHOOK_URL}
+      - N8N_POST_WEBHOOK_URL=${N8N_POST_WEBHOOK_URL}
+      
+      # Admin Notifications
+      - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
+      - ENABLE_ADMIN_NOTIFICATIONS=${ENABLE_ADMIN_NOTIFICATIONS:-True}
+      
+      # Bot Configuration
+      - MAX_USERS=${MAX_USERS:-1000}
+      - DEBUG=${DEBUG:-False}
+      
+    volumes:
+      - ./logs:/app/logs
+      - ./config.env:/app/config.env:ro
+    
+    networks:
+      - bot-network
+      - external-services
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Ограничения ресурсов
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Логирование
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  bot-network:
+    driver: bridge
+  
+  # Сеть для подключения к внешним сервисам (N8N, Supabase)
+  external-services:
+    external: true
+    name: services-network
+
+volumes:
+  bot-logs:
+    driver: local
