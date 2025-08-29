@@ -136,8 +136,10 @@ class BotErrorHandler:
         
         logger.error(f"General error: {error}")
         logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.debug(f"Update type: {type(update)}, has effective_message: {hasattr(update, 'effective_message') if update else 'update is None'}")
         
-        if update and update.effective_message:
+        # Проверяем, что update является правильным объектом Update
+        if update and hasattr(update, 'effective_message') and update.effective_message:
             try:
                 await update.effective_message.reply_text(
                     messages.ERROR_GENERAL,
@@ -223,6 +225,11 @@ def rate_limit_handler(rate_limiter: RateLimiter):
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs) -> Any:
+            # Проверяем, что update действительно является объектом Update
+            if not hasattr(update, 'effective_user') or not update.effective_user:
+                logger.warning(f"Rate limiter: Invalid update object type: {type(update)}")
+                return await func(update, context, *args, **kwargs)
+            
             user_id = update.effective_user.id
             
             if not await rate_limiter.is_allowed(user_id):

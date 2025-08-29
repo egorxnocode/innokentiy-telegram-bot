@@ -85,8 +85,8 @@ class TelegramBot:
         # Обработчик ошибок
         self.app.add_error_handler(self.error_handler)
     
-    @telegram_error_handler
     @rate_limit_handler(global_rate_limiter)
+    @telegram_error_handler
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
         try:
