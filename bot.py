@@ -67,9 +67,10 @@ class TelegramBot:
         self.app.add_handler(CallbackQueryHandler(self.handle_callback_query))
         
         # Обработчики сообщений по состояниям
+        # Обработчик кнопок главного меню (должен быть ДО общего текстового обработчика!)
         self.app.add_handler(MessageHandler(
-            filters.TEXT & ~filters.COMMAND, 
-            self.handle_text_message
+            filters.Regex("^👤 Профиль$"),
+            self.profile_command
         ))
         
         # Обработчик голосовых сообщений
@@ -78,10 +79,10 @@ class TelegramBot:
             self.handle_voice_message
         ))
         
-        # Обработчик кнопок главного меню
+        # Обработчик текстовых сообщений (должен быть последним среди обработчиков сообщений)
         self.app.add_handler(MessageHandler(
-            filters.Regex("^👤 Профиль$"),
-            self.profile_command
+            filters.TEXT & ~filters.COMMAND, 
+            self.handle_text_message
         ))
         
         # Обработчик ошибок
@@ -649,12 +650,7 @@ class TelegramBot:
     
     async def handle_registered_user_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Обработка сообщений от зарегистрированных пользователей"""
-        # Проверяем, не является ли это кнопкой главного меню
-        if text == "👤 Профиль":
-            # Эта кнопка обрабатывается отдельным handler'ом, не дублируем
-            return
-        
-        # Для остальных сообщений показываем главное меню
+        # Для неизвестных сообщений показываем главное меню
         await self.show_main_menu(update, context)
     
     async def handle_suggest_topic(self, query_or_update, context: ContextTypes.DEFAULT_TYPE):
