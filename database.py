@@ -64,7 +64,11 @@ class Database:
             
             if response.data:
                 logger.info(f"Пользователь с Telegram ID {telegram_id} найден")
-                return response.data[0]
+                # Безопасное получение первого элемента
+                if isinstance(response.data, list) and len(response.data) > 0:
+                    return response.data[0]
+                else:
+                    return response.data
             else:
                 logger.info(f"Пользователь с Telegram ID {telegram_id} не найден")
                 return None
@@ -103,7 +107,11 @@ class Database:
             
             if response.data:
                 logger.info(f"Пользователь {telegram_id} успешно создан")
-                return response.data[0]
+                # Безопасное получение первого элемента
+                if isinstance(response.data, list) and len(response.data) > 0:
+                    return response.data[0]
+                else:
+                    return response.data
             else:
                 raise Exception("Не удалось создать пользователя")
                 
@@ -220,7 +228,11 @@ class Database:
             
             if response.data:
                 logger.info(f"Контент для дня {day_of_month} найден")
-                return response.data[0]
+                # Безопасное получение первого элемента
+                if isinstance(response.data, list) and len(response.data) > 0:
+                    return response.data[0]
+                else:
+                    return response.data
             else:
                 logger.warning(f"Контент для дня {day_of_month} не найден")
                 return None
@@ -251,7 +263,11 @@ class Database:
             response = self.supabase.rpc('check_user_post_limit', {'p_user_id': user_id}).execute()
             
             if response.data:
-                result = response.data[0]
+                # Безопасное получение первого элемента
+                if isinstance(response.data, list) and len(response.data) > 0:
+                    result = response.data[0]
+                else:
+                    result = response.data
                 logger.info(f"Лимит пользователя {telegram_id}: {result}")
                 return result
             else:
