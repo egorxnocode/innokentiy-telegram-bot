@@ -288,10 +288,10 @@ class Database:
             # Вызываем функцию инкремента
             response = self.supabase.rpc('increment_user_post_count', {'p_user_id': user_id}).execute()
             
-            if response.data:
-                result = response.data[0]
+            if response.data is not None:
+                # SQL функция возвращает boolean напрямую, не в массиве
+                result = response.data
                 logger.info(f"Счетчик постов пользователя {telegram_id} обновлен: {result}")
-                # Возвращаем именно bool, не result
                 return bool(result)
             else:
                 logger.warning(f"Не удалось обновить счетчик постов пользователя {telegram_id}")
