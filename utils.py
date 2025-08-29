@@ -140,6 +140,9 @@ class NicheDetector:
             }
             
             # Отправляем POST запрос в N8N niche webhook
+            logger.info(f"Отправляю запрос в N8N: {N8N_NICHE_WEBHOOK_URL}")
+            logger.debug(f"Payload: {payload}")
+            
             response = requests.post(
                 N8N_NICHE_WEBHOOK_URL,
                 json=payload,
