@@ -874,15 +874,19 @@ class TelegramBot:
             await self.app.start()
             await self.app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
             # Ждем до получения сигнала остановки
-            await self.app.updater.idle()
+            # В новых версиях python-telegram-bot используется app.idle()
+            await self.app.idle()
         except Exception as e:
             logger.error(f"Ошибка в async run: {e}")
         finally:
-            if self.app.updater.running:
-                await self.app.updater.stop()
-            if hasattr(self.app, '_initialized') and self.app._initialized:
-                await self.app.stop()
-                await self.app.shutdown()
+            try:
+                if hasattr(self.app, 'updater') and self.app.updater.running:
+                    await self.app.updater.stop()
+                if hasattr(self.app, '_initialized') and self.app._initialized:
+                    await self.app.stop()
+                    await self.app.shutdown()
+            except Exception as e:
+                logger.error(f"Ошибка при остановке: {e}")
     
     def run_sync(self):
         """Синхронный запуск бота для использования в executor"""
