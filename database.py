@@ -256,20 +256,13 @@ class Database:
             if not user:
                 raise Exception("Пользователь не найден")
             
-            # ВРЕМЕННО: используем старую систему подсчета пока не выполнена миграция
-            # TODO: После выполнения add_weekly_counter.sql вернуть новую систему
+            # Обнуляем счетчики если нужно (вызываем SQL функцию)
+            self.supabase.rpc('reset_weekly_counters').execute()
             
-            # Считаем посты за последние 7 дней (временно)
-            from datetime import datetime, timedelta
-            seven_days_ago = (datetime.now() - timedelta(days=7)).isoformat()
+            # Получаем обновленного пользователя
+            user = await self.get_user_by_telegram_id(telegram_id)
             
-            user_id = user['id']
-            try:
-                response = self.supabase.table('user_posts').select('id').eq('user_id', user_id).gte('created_at', seven_days_ago).execute()
-                posts_count = len(response.data) if response.data else 0
-            except:
-                # Если таблица user_posts тоже не существует, используем 0
-                posts_count = 0
+            posts_count = user.get('weekly_posts_count', 0)
             remaining_posts = max(0, WEEKLY_POST_LIMIT - posts_count)
             can_generate = posts_count < WEEKLY_POST_LIMIT
             
@@ -320,11 +313,11 @@ class Database:
             }).execute()
             
             if response.data:
-                # ВРЕМЕННО: не увеличиваем счетчик пока не выполнена миграция
-                # TODO: После выполнения add_weekly_counter.sql вернуть:
-                # counter_response = self.supabase.rpc('increment_weekly_post_counter', {'p_user_id': user_id}).execute()
+                # Увеличиваем счетчик постов у пользователя
+                counter_response = self.supabase.rpc('increment_weekly_post_counter', {'p_user_id': user_id}).execute()
                 
-                logger.info(f"Пост пользователя {telegram_id} сохранен (без счетчика - нужна миграция)")
+                new_count = counter_response.data if counter_response.data else 0
+                logger.info(f"Пост пользователя {telegram_id} сохранен. Новый счетчик: {new_count}")
                 return True
             else:
                 logger.warning(f"Не удалось сохранить пост пользователя {telegram_id}")
