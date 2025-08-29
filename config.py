@@ -60,7 +60,7 @@ USERS_TABLE = 'users'
 EMAILS_TABLE = 'allowed_emails'
 DAILY_CONTENT_TABLE = 'daily_content'
 USER_POST_LIMITS_TABLE = 'user_post_limits'
-GENERATED_POSTS_TABLE = 'generated_posts'
+# GENERATED_POSTS_TABLE удален - используем простую систему user_posts
 
 # Bot States
 class BotStates:

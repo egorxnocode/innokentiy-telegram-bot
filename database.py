@@ -9,8 +9,7 @@ from datetime import datetime
 from supabase import create_client, Client
 from config import (
     SUPABASE_URL, SUPABASE_KEY, USERS_TABLE, EMAILS_TABLE,
-    DAILY_CONTENT_TABLE, USER_POST_LIMITS_TABLE,
-    GENERATED_POSTS_TABLE, WEEKLY_POST_LIMIT
+    DAILY_CONTENT_TABLE, WEEKLY_POST_LIMIT
 )
 
 logger = logging.getLogger(__name__)
@@ -243,55 +242,13 @@ class Database:
 
     async def check_user_post_limit(self, telegram_id: int) -> Dict[str, Any]:
         """
-        Проверяет лимит постов пользователя на текущую неделю
+        Проверяет лимит постов пользователя за последние 7 дней (простая система)
         
         Args:
             telegram_id (int): Telegram ID пользователя
             
         Returns:
             Dict: Информация о лимитах пользователя
-        """
-        try:
-            # Сначала получаем ID пользователя
-            user = await self.get_user_by_telegram_id(telegram_id)
-            if not user:
-                raise Exception("Пользователь не найден")
-            
-            user_id = user['id']
-            
-            # Вызываем функцию проверки лимита
-            response = self.supabase.rpc('check_user_post_limit', {'p_user_id': user_id}).execute()
-            
-            if response.data:
-                # Безопасное получение первого элемента
-                if isinstance(response.data, list) and len(response.data) > 0:
-                    result = response.data[0]
-                else:
-                    result = response.data
-                logger.info(f"Лимит пользователя {telegram_id}: {result}")
-                return result
-            else:
-                # Если функции нет, создаем запись вручную
-                return {
-                    'can_generate': True,
-                    'remaining_posts': WEEKLY_POST_LIMIT,
-                    'posts_generated': 0,
-                    'posts_limit': WEEKLY_POST_LIMIT
-                }
-                
-        except Exception as e:
-            logger.error(f"Ошибка при проверке лимита постов пользователя {telegram_id}: {e}")
-            raise
-
-    async def increment_user_post_count(self, telegram_id: int) -> bool:
-        """
-        Увеличивает счетчик постов пользователя
-        
-        Args:
-            telegram_id (int): Telegram ID пользователя
-            
-        Returns:
-            bool: True если успешно, False если лимит превышен
         """
         try:
             # Получаем ID пользователя
@@ -301,24 +258,71 @@ class Database:
             
             user_id = user['id']
             
-            # Вызываем функцию инкремента
-            response = self.supabase.rpc('increment_user_post_count', {'p_user_id': user_id}).execute()
+            # Считаем посты за последние 7 дней
+            from datetime import datetime, timedelta
+            seven_days_ago = (datetime.now() - timedelta(days=7)).isoformat()
             
-            if response.data is not None:
-                # SQL функция возвращает boolean, но иногда может быть в массиве
-                if isinstance(response.data, list) and len(response.data) > 0:
-                    result = response.data[0]
-                else:
-                    result = response.data
-                    
-                logger.info(f"Счетчик постов пользователя {telegram_id} обновлен: {result}")
-                return bool(result)
+            response = self.supabase.table('user_posts').select('id').eq('user_id', user_id).gte('created_at', seven_days_ago).execute()
+            
+            posts_count = len(response.data) if response.data else 0
+            remaining_posts = max(0, WEEKLY_POST_LIMIT - posts_count)
+            can_generate = posts_count < WEEKLY_POST_LIMIT
+            
+            result = {
+                'can_generate': can_generate,
+                'remaining_posts': remaining_posts,
+                'posts_generated': posts_count,
+                'posts_limit': WEEKLY_POST_LIMIT
+            }
+            
+            logger.info(f"Лимит пользователя {telegram_id}: {result}")
+            return result
+                
+        except Exception as e:
+            logger.error(f"Ошибка при проверке лимита постов пользователя {telegram_id}: {e}")
+            raise
+
+    async def save_user_post(self, telegram_id: int, post_content: str, adapted_topic: str = "", 
+                           user_question: str = "", user_answer: str = "") -> bool:
+        """
+        Сохраняет пост пользователя (новая простая система)
+        
+        Args:
+            telegram_id (int): Telegram ID пользователя
+            post_content (str): Содержимое поста
+            adapted_topic (str): Адаптированная тема
+            user_question (str): Вопрос пользователю
+            user_answer (str): Ответ пользователя
+            
+        Returns:
+            bool: True если успешно сохранено
+        """
+        try:
+            # Получаем ID пользователя
+            user = await self.get_user_by_telegram_id(telegram_id)
+            if not user:
+                raise Exception("Пользователь не найден")
+            
+            user_id = user['id']
+            
+            # Сохраняем пост в простую таблицу
+            response = self.supabase.table('user_posts').insert({
+                'user_id': user_id,
+                'post_content': post_content,
+                'adapted_topic': adapted_topic,
+                'user_question': user_question,
+                'user_answer': user_answer
+            }).execute()
+            
+            if response.data:
+                logger.info(f"Пост пользователя {telegram_id} успешно сохранен")
+                return True
             else:
-                logger.warning(f"Не удалось обновить счетчик постов пользователя {telegram_id}")
+                logger.warning(f"Не удалось сохранить пост пользователя {telegram_id}")
                 return False
                 
         except Exception as e:
-            logger.error(f"Ошибка при обновлении счетчика постов пользователя {telegram_id}: {e}")
+            logger.error(f"Ошибка при сохранении поста пользователя {telegram_id}: {e}")
             raise
 
     async def save_generated_post(self, telegram_id: int, content_data: Dict[str, Any], 
@@ -338,41 +342,14 @@ class Database:
         Returns:
             bool: True если успешно сохранено
         """
-        try:
-            # Получаем ID пользователя
-            user = await self.get_user_by_telegram_id(telegram_id)
-            if not user:
-                raise Exception("Пользователь не найден")
-            
-            user_id = user['id']
-            
-            # Получаем начало недели
-            from datetime import datetime, timedelta
-            today = datetime.now().date()
-            week_start = today - timedelta(days=today.weekday())
-            
-            post_data = {
-                'user_id': user_id,
-                'daily_content_id': content_data.get('id') if content_data else None,
-                'adapted_topic': adapted_topic,
-                'user_question': question,
-                'user_answer': user_answer,
-                'generated_content': generated_content,
-                'week_start_date': week_start.isoformat()
-            }
-            
-            response = self.supabase.table(GENERATED_POSTS_TABLE).insert(post_data).execute()
-            
-            if response.data:
-                logger.info(f"Пост пользователя {telegram_id} сохранен в историю")
-                return True
-            else:
-                logger.warning(f"Не удалось сохранить пост пользователя {telegram_id}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Ошибка при сохранении поста пользователя {telegram_id}: {e}")
-            raise
+        # Используем новую простую систему
+        return await self.save_user_post(
+            telegram_id=telegram_id,
+            post_content=generated_content,
+            adapted_topic=adapted_topic,
+            user_question=question,
+            user_answer=user_answer
+        )
 
     async def get_user_posts_this_week(self, telegram_id: int) -> list:
         """
@@ -392,12 +369,11 @@ class Database:
             
             user_id = user['id']
             
-            # Получаем начало недели
+            # Получаем посты за последние 7 дней
             from datetime import datetime, timedelta
-            today = datetime.now().date()
-            week_start = today - timedelta(days=today.weekday())
+            seven_days_ago = (datetime.now() - timedelta(days=7)).isoformat()
             
-            response = self.supabase.table(GENERATED_POSTS_TABLE).select("*").eq("user_id", user_id).eq("week_start_date", week_start.isoformat()).order("created_at", desc=True).execute()
+            response = self.supabase.table('user_posts').select("*").eq("user_id", user_id).gte("created_at", seven_days_ago).order("created_at", desc=True).execute()
             
             if response.data:
                 logger.info(f"Найдено {len(response.data)} постов пользователя {telegram_id} за неделю")

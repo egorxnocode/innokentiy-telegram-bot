@@ -360,29 +360,20 @@ class PostSystem:
             if not generated_content:
                 return False, messages.ERROR_POST_GENERATION
             
-            # Увеличиваем счетчик постов
-            increment_success = await retry_helper.retry_async_operation(
-                lambda: db.increment_user_post_count(telegram_id)
-            )
-            
-            if not increment_success:
-                logger.warning(f"Не удалось увеличить счетчик постов для пользователя {telegram_id}")
-                return False, messages.WEEKLY_LIMIT_EXCEEDED.format(
-                    posts_generated=limit_info.get('posts_generated', 0),
-                    posts_limit=limit_info.get('posts_limit', 10)
-                )
-            
-            # Сохраняем пост в историю
-            await retry_helper.retry_async_operation(
-                lambda: db.save_generated_post(
+            # Сохраняем пост (новая простая система)
+            save_success = await retry_helper.retry_async_operation(
+                lambda: db.save_user_post(
                     telegram_id=telegram_id,
-                    content_data=content_data,
+                    post_content=generated_content,
                     adapted_topic=content_data.get('adapted_topic', ''),
-                    question=content_data.get('question', ''),
-                    user_answer=user_answer,
-                    generated_content=generated_content
+                    user_question=content_data.get('question', ''),
+                    user_answer=user_answer
                 )
             )
+            
+            if not save_success:
+                logger.warning(f"Не удалось сохранить пост для пользователя {telegram_id}")
+                return False, messages.ERROR_POST_GENERATION
             
             return True, messages.GENERATED_POST.format(
                 generated_content=text_formatter.escape_html(generated_content)

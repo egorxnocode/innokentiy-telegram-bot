@@ -131,39 +131,22 @@ CREATE TABLE IF NOT EXISTS daily_content (
 -- Уникальный индекс для дня месяца (один день - один набор контента)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_content_day_active ON daily_content(day_of_month) WHERE is_active = true;
 
--- Таблица для отслеживания еженедельных лимитов постов
-CREATE TABLE IF NOT EXISTS user_post_limits (
+-- НОВАЯ ПРОСТАЯ СИСТЕМА СЧЕТЧИКА ПОСТОВ
+-- Простая таблица для постов пользователей (заменяет user_post_limits и generated_posts)
+CREATE TABLE IF NOT EXISTS user_posts (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    week_start_date DATE NOT NULL,
-    posts_generated INTEGER DEFAULT 0 NOT NULL,
-    posts_limit INTEGER DEFAULT 10 NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
-
--- Уникальный индекс для пользователя и недели
-CREATE UNIQUE INDEX IF NOT EXISTS idx_user_post_limits_user_week ON user_post_limits(user_id, week_start_date);
-
--- Таблица истории сгенерированных постов
-CREATE TABLE IF NOT EXISTS generated_posts (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    daily_content_id BIGINT REFERENCES daily_content(id),
+    post_content TEXT NOT NULL,
     adapted_topic TEXT,
     user_question TEXT,
     user_answer TEXT,
-    generated_content TEXT,
-    week_start_date DATE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
 -- Индексы для оптимизации запросов
-CREATE INDEX IF NOT EXISTS idx_user_post_limits_user_id ON user_post_limits(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_post_limits_week ON user_post_limits(week_start_date);
-CREATE INDEX IF NOT EXISTS idx_generated_posts_user_id ON generated_posts(user_id);
-CREATE INDEX IF NOT EXISTS idx_generated_posts_week ON generated_posts(week_start_date);
-CREATE INDEX IF NOT EXISTS idx_generated_posts_created_at ON generated_posts(created_at);
+CREATE INDEX IF NOT EXISTS idx_user_posts_user_id ON user_posts(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_posts_created_at ON user_posts(created_at);
+CREATE INDEX IF NOT EXISTS idx_user_posts_user_created ON user_posts(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_daily_content_day ON daily_content(day_of_month);
 CREATE INDEX IF NOT EXISTS idx_daily_content_active ON daily_content(is_active);
 
@@ -174,106 +157,18 @@ CREATE TRIGGER update_daily_content_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- Триггер для автоматического обновления updated_at в таблице user_post_limits
-DROP TRIGGER IF EXISTS update_user_post_limits_updated_at ON user_post_limits;
-CREATE TRIGGER update_user_post_limits_updated_at
-    BEFORE UPDATE ON user_post_limits
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+-- Триггеры удалены - простая система не требует updated_at
 
 -- Добавление политик RLS для новых таблиц
 ALTER TABLE daily_content ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_post_limits ENABLE ROW LEVEL SECURITY;
-ALTER TABLE generated_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_posts ENABLE ROW LEVEL SECURITY;
 
 -- Политики для новых таблиц (полный доступ для сервиса)
 CREATE POLICY "Enable all access for service role" ON daily_content FOR ALL USING (true);
-CREATE POLICY "Enable all access for service role" ON user_post_limits FOR ALL USING (true);
-CREATE POLICY "Enable all access for service role" ON generated_posts FOR ALL USING (true);
+CREATE POLICY "Enable all access for service role" ON user_posts FOR ALL USING (true);
 
--- Функция для получения начала недели
-CREATE OR REPLACE FUNCTION get_week_start(input_date DATE DEFAULT CURRENT_DATE)
-RETURNS DATE AS $$
-BEGIN
-    -- Возвращает понедельник текущей недели
-    RETURN input_date - (EXTRACT(DOW FROM input_date)::INTEGER - 1);
-END;
-$$ LANGUAGE plpgsql;
-
--- Функция для проверки лимита постов пользователя
-CREATE OR REPLACE FUNCTION check_user_post_limit(p_user_id BIGINT)
-RETURNS TABLE (
-    can_generate BOOLEAN,
-    remaining_posts INTEGER,
-    posts_generated INTEGER,
-    posts_limit INTEGER
-) AS $$
-DECLARE
-    current_week_start DATE;
-    user_limit_record RECORD;
-BEGIN
-    current_week_start := get_week_start();
-    
-    -- Получаем или создаем запись лимита для текущей недели
-    SELECT * INTO user_limit_record
-    FROM user_post_limits
-    WHERE user_id = p_user_id AND week_start_date = current_week_start;
-    
-    -- Если записи нет, создаем её
-    IF user_limit_record IS NULL THEN
-        INSERT INTO user_post_limits (user_id, week_start_date, posts_generated, posts_limit)
-        VALUES (p_user_id, current_week_start, 0, 10)
-        RETURNING * INTO user_limit_record;
-    END IF;
-    
-    -- Возвращаем результат
-    RETURN QUERY SELECT 
-        (user_limit_record.posts_generated < user_limit_record.posts_limit) as can_generate,
-        (user_limit_record.posts_limit - user_limit_record.posts_generated) as remaining_posts,
-        user_limit_record.posts_generated,
-        user_limit_record.posts_limit;
-END;
-$$ LANGUAGE plpgsql;
-
--- Функция для инкремента счетчика постов
-CREATE OR REPLACE FUNCTION increment_user_post_count(p_user_id BIGINT)
-RETURNS BOOLEAN AS $$
-DECLARE
-    current_week_start DATE;
-    updated_rows INTEGER;
-BEGIN
-    current_week_start := get_week_start();
-    
-    -- Обновляем счетчик постов
-    UPDATE user_post_limits 
-    SET posts_generated = posts_generated + 1,
-        updated_at = TIMEZONE('utc'::text, NOW())
-    WHERE user_id = p_user_id 
-      AND week_start_date = current_week_start
-      AND posts_generated < posts_limit;
-    
-    GET DIAGNOSTICS updated_rows = ROW_COUNT;
-    
-    -- Если ничего не обновилось, возможно нужно создать запись или лимит превышен
-    IF updated_rows = 0 THEN
-        -- Проверяем, есть ли запись
-        IF NOT EXISTS (
-            SELECT 1 FROM user_post_limits 
-            WHERE user_id = p_user_id AND week_start_date = current_week_start
-        ) THEN
-            -- Создаем новую запись
-            INSERT INTO user_post_limits (user_id, week_start_date, posts_generated, posts_limit)
-            VALUES (p_user_id, current_week_start, 1, 10);
-            RETURN TRUE;
-        ELSE
-            -- Лимит превышен
-            RETURN FALSE;
-        END IF;
-    END IF;
-    
-    RETURN TRUE;
-END;
-$$ LANGUAGE plpgsql;
+-- ПРОСТАЯ СИСТЕМА СЧЕТЧИКА - НЕ НУЖНЫ СЛОЖНЫЕ SQL ФУНКЦИИ
+-- Вся логика перенесена в Python код для простоты и надежности
 
 -- Вставка базовых данных
 
