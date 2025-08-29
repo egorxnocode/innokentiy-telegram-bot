@@ -291,7 +291,8 @@ class Database:
             if response.data:
                 result = response.data[0]
                 logger.info(f"Счетчик постов пользователя {telegram_id} обновлен: {result}")
-                return result
+                # Возвращаем именно bool, не result
+                return bool(result)
             else:
                 logger.warning(f"Не удалось обновить счетчик постов пользователя {telegram_id}")
                 return False
