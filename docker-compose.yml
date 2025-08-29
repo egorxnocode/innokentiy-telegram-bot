@@ -14,10 +14,10 @@ services:
       # OpenAI
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       
-      # N8N Webhooks (подключение к существующему N8N)
-      - N8N_NICHE_WEBHOOK_URL=http://n8n-n8n-1:5678/webhook/niche
-      - N8N_TOPIC_WEBHOOK_URL=http://n8n-n8n-1:5678/webhook/topic
-      - N8N_POST_WEBHOOK_URL=http://n8n-n8n-1:5678/webhook/post
+      # N8N Webhooks (используем внешний URL)
+      - N8N_NICHE_WEBHOOK_URL=https://tgtext.ru/webhook-test/niche
+      - N8N_TOPIC_WEBHOOK_URL=https://tgtext.ru/webhook-test/topic
+      - N8N_POST_WEBHOOK_URL=https://tgtext.ru/webhook-test/post
       
       # Admin Notifications
       - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
