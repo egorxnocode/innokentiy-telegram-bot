@@ -242,7 +242,7 @@ class Database:
 
     async def check_user_post_limit(self, telegram_id: int) -> Dict[str, Any]:
         """
-        Проверяет лимит постов пользователя за последние 7 дней (простая система)
+        Проверяет лимит постов пользователя используя счетчик в таблице users
         
         Args:
             telegram_id (int): Telegram ID пользователя
@@ -251,20 +251,18 @@ class Database:
             Dict: Информация о лимитах пользователя
         """
         try:
-            # Получаем ID пользователя
+            # Получаем пользователя с счетчиком постов
             user = await self.get_user_by_telegram_id(telegram_id)
             if not user:
                 raise Exception("Пользователь не найден")
             
-            user_id = user['id']
+            # Обнуляем счетчики если нужно (вызываем SQL функцию)
+            self.supabase.rpc('reset_weekly_counters').execute()
             
-            # Считаем посты за последние 7 дней
-            from datetime import datetime, timedelta
-            seven_days_ago = (datetime.now() - timedelta(days=7)).isoformat()
+            # Получаем обновленного пользователя
+            user = await self.get_user_by_telegram_id(telegram_id)
             
-            response = self.supabase.table('user_posts').select('id').eq('user_id', user_id).gte('created_at', seven_days_ago).execute()
-            
-            posts_count = len(response.data) if response.data else 0
+            posts_count = user.get('weekly_posts_count', 0)
             remaining_posts = max(0, WEEKLY_POST_LIMIT - posts_count)
             can_generate = posts_count < WEEKLY_POST_LIMIT
             
@@ -285,7 +283,7 @@ class Database:
     async def save_user_post(self, telegram_id: int, post_content: str, adapted_topic: str = "", 
                            user_question: str = "", user_answer: str = "") -> bool:
         """
-        Сохраняет пост пользователя (новая простая система)
+        Сохраняет пост пользователя и увеличивает счетчик
         
         Args:
             telegram_id (int): Telegram ID пользователя
@@ -305,7 +303,7 @@ class Database:
             
             user_id = user['id']
             
-            # Сохраняем пост в простую таблицу
+            # Сохраняем пост в таблицу user_posts
             response = self.supabase.table('user_posts').insert({
                 'user_id': user_id,
                 'post_content': post_content,
@@ -315,7 +313,11 @@ class Database:
             }).execute()
             
             if response.data:
-                logger.info(f"Пост пользователя {telegram_id} успешно сохранен")
+                # Увеличиваем счетчик постов у пользователя
+                counter_response = self.supabase.rpc('increment_weekly_post_counter', {'p_user_id': user_id}).execute()
+                
+                new_count = counter_response.data if counter_response.data else 0
+                logger.info(f"Пост пользователя {telegram_id} сохранен. Новый счетчик: {new_count}")
                 return True
             else:
                 logger.warning(f"Не удалось сохранить пост пользователя {telegram_id}")

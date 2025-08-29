@@ -122,6 +122,20 @@ class ReminderScheduler:
         except Exception as e:
             logger.error(f"Критическая ошибка при отправке ежедневных напоминаний: {e}")
     
+    async def reset_weekly_counters(self):
+        """Обнуляет еженедельные счетчики постов всех пользователей"""
+        try:
+            logger.info("Запуск обнуления еженедельных счетчиков постов")
+            
+            # Вызываем SQL функцию для обнуления счетчиков
+            response = db.supabase.rpc('reset_weekly_counters').execute()
+            
+            updated_count = response.data if response.data else 0
+            logger.info(f"Обнулено счетчиков у {updated_count} пользователей")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обнулении еженедельных счетчиков: {e}")
+    
     async def schedule_loop(self):
         """Основной цикл планировщика"""
         logger.info("Запуск планировщика напоминаний")
@@ -139,6 +153,14 @@ class ReminderScheduler:
                     
                     # Ждем минуту, чтобы не отправлять напоминания несколько раз
                     await asyncio.sleep(60)
+                
+                # Проверяем, нужно ли обнулить счетчики (понедельник в 00:01)
+                elif (now.weekday() == 0 and  # Понедельник
+                      now.time().hour == 0 and 
+                      now.time().minute == 1):
+                    
+                    await self.reset_weekly_counters()
+                    await asyncio.sleep(60)  # Ждем минуту
                 else:
                     # Проверяем каждые 30 секунд
                     await asyncio.sleep(30)
