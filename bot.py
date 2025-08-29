@@ -873,19 +873,33 @@ class TelegramBot:
             await self.app.initialize()
             await self.app.start()
             await self.app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-            # Просто ждем бесконечно - бот будет работать в фоне
-            logger.info("Бот запущен и работает...")
-            while True:
-                await asyncio.sleep(1)
+            logger.info("Бот запущен и готов принимать сообщения...")
+            
+            # Создаем задачу для ожидания остановки
+            stop_event = asyncio.Event()
+            
+            # Функция для обработки сигналов остановки
+            def signal_handler():
+                stop_event.set()
+            
+            # В реальном приложении здесь бы были обработчики сигналов
+            # Пока просто ждем бесконечно или до остановки
+            try:
+                await stop_event.wait()
+            except asyncio.CancelledError:
+                logger.info("Получен сигнал остановки")
+                
         except Exception as e:
             logger.error(f"Ошибка в async run: {e}")
         finally:
             try:
+                logger.info("Останавливаем бота...")
                 if hasattr(self.app, 'updater') and self.app.updater.running:
                     await self.app.updater.stop()
                 if hasattr(self.app, '_initialized') and self.app._initialized:
                     await self.app.stop()
                     await self.app.shutdown()
+                logger.info("Бот остановлен")
             except Exception as e:
                 logger.error(f"Ошибка при остановке: {e}")
     
@@ -897,14 +911,19 @@ class TelegramBot:
     async def stop(self):
         """Остановка бота"""
         try:
+            logger.info("Останавливаем Telegram бота...")
             if hasattr(self.app, 'updater') and self.app.updater.running:
                 await self.app.updater.stop()
             if hasattr(self.app, '_initialized') and self.app._initialized:
                 await self.app.stop()
                 await self.app.shutdown()
-            logger.info("Бот остановлен")
+            logger.info("Telegram бот остановлен")
         except Exception as e:
             logger.error(f"Ошибка при остановке бота: {e}")
+    
+    def set_stop_event(self, stop_event):
+        """Установить событие остановки"""
+        self.stop_event = stop_event
 
 # Создаем и запускаем бота
 if __name__ == "__main__":
