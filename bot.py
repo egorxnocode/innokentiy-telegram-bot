@@ -25,7 +25,8 @@ from config import (
     PROFILE_KEYBOARD,
     MAX_USERS,
     LOG_LEVEL,
-    LOG_FORMAT
+    LOG_FORMAT,
+    ADMIN_CHAT_ID
 )
 from database import db
 from utils import email_validator, voice_processor, niche_detector, retry_helper, text_formatter
@@ -549,10 +550,18 @@ class TelegramBot:
             )
     
     async def test_reminder_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Тестовая команда для отправки напоминания о написании поста"""
+        """Тестовая команда для отправки напоминания о написании поста (только для админа)"""
         try:
             user = update.effective_user
             telegram_id = user.id
+            
+            # Проверяем, что это админ
+            if str(telegram_id) != ADMIN_CHAT_ID:
+                await update.message.reply_text(
+                    "❌ У вас нет прав для выполнения этой команды.",
+                    parse_mode='HTML'
+                )
+                return
             
             # Проверяем, что пользователь зарегистрирован
             current_user = await retry_helper.retry_async_operation(

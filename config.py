@@ -50,9 +50,9 @@ if not N8N_POST_WEBHOOK_URL and os.getenv('N8N_WEBHOOK_URL'):
 MAX_USERS = int(os.getenv('MAX_USERS', 1000))
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
-# Admin Notifications
-# Отправка уведомлений через основной бот в админский чат
+# Admin Configuration
 ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')
+ADMIN_BOT_TOKEN = os.getenv('ADMIN_BOT_TOKEN')  # Токен отдельного бота для админских уведомлений
 ENABLE_ADMIN_NOTIFICATIONS = os.getenv('ENABLE_ADMIN_NOTIFICATIONS', 'True').lower() == 'true'
 
 # Database Tables

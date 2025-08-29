@@ -98,6 +98,8 @@ class PostSystem:
             N8NConnectionError: При ошибках подключения
         """
         try:
+            from webhook_server import callback_manager
+            
             payload = {
                 'action': 'adapt_topic',
                 'topic': topic,
@@ -105,41 +107,34 @@ class PostSystem:
                 'language': 'ru'
             }
             
-            logger.info(f"Отправляем запрос адаптации темы в N8N (таймаут: {N8N_TOPIC_TIMEOUT}с)")
+            logger.info(f"Отправляем асинхронный запрос адаптации темы в N8N")
             
-            response = requests.post(
+            # Отправляем асинхронный запрос в N8N
+            request_id = await callback_manager.send_async_request(
                 N8N_TOPIC_WEBHOOK_URL,
-                json=payload,
-                timeout=(N8N_CONNECTION_TIMEOUT, N8N_TOPIC_TIMEOUT),
-                headers={'Content-Type': 'application/json'}
+                payload,
+                "topic"
             )
             
-            if response.status_code == 200:
-                result = response.json()
+            # Ждем callback от N8N
+            logger.info(f"Ожидаю callback от N8N для адаптации темы: {request_id}")
+            result = await callback_manager.wait_for_callback(request_id, timeout=180)
+            
+            if result and result.get('success'):
                 adapted_topic = result.get('adapted_topic', '').strip()
-                
                 if adapted_topic:
                     logger.info(f"Тема успешно адаптирована: {adapted_topic}")
                     return adapted_topic
                 else:
-                    logger.warning("N8N вернул пустую адаптированную тему")
-                    raise N8NConnectionError("Пустой ответ от N8N")
+                    logger.warning("N8N вернул пустую адаптированную тему через callback")
+                    return None
             else:
-                logger.error(f"N8N вернул ошибку {response.status_code}: {response.text}")
-                raise N8NConnectionError(f"HTTP {response.status_code}")
+                logger.error("Не получен callback от N8N для адаптации темы")
+                return None
                 
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Таймаут при адаптации темы: {e}")
-            raise N8NTimeoutError("Превышено время ожидания адаптации темы")
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Ошибка подключения к N8N: {e}")
-            raise N8NConnectionError("Не удалось подключиться к серверу")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Ошибка запроса к N8N: {e}")
-            raise N8NConnectionError(f"Ошибка запроса: {e}")
         except Exception as e:
-            logger.error(f"Неожиданная ошибка при адаптации темы: {e}")
-            raise
+            logger.error(f"Ошибка при адаптации темы: {e}")
+            return None
     
     @staticmethod
     async def generate_post_content(niche: str, topic: str, question: str, user_answer: str) -> Optional[str]:
@@ -160,6 +155,8 @@ class PostSystem:
             N8NConnectionError: При ошибках подключения
         """
         try:
+            from webhook_server import callback_manager
+            
             payload = {
                 'action': 'generate_post',
                 'niche': niche,
@@ -169,41 +166,34 @@ class PostSystem:
                 'language': 'ru'
             }
             
-            logger.info(f"Отправляем запрос генерации поста в N8N (таймаут: {N8N_POST_TIMEOUT}с)")
+            logger.info(f"Отправляем асинхронный запрос генерации поста в N8N")
             
-            response = requests.post(
+            # Отправляем асинхронный запрос в N8N
+            request_id = await callback_manager.send_async_request(
                 N8N_POST_WEBHOOK_URL,
-                json=payload,
-                timeout=(N8N_CONNECTION_TIMEOUT, N8N_POST_TIMEOUT),
-                headers={'Content-Type': 'application/json'}
+                payload,
+                "post"
             )
             
-            if response.status_code == 200:
-                result = response.json()
+            # Ждем callback от N8N
+            logger.info(f"Ожидаю callback от N8N для генерации поста: {request_id}")
+            result = await callback_manager.wait_for_callback(request_id, timeout=180)
+            
+            if result and result.get('success'):
                 generated_content = result.get('generated_post', '').strip()
-                
                 if generated_content:
                     logger.info(f"Пост успешно сгенерирован: {len(generated_content)} символов")
                     return generated_content
                 else:
-                    logger.warning("N8N вернул пустой сгенерированный пост")
-                    raise N8NConnectionError("Пустой ответ от N8N")
+                    logger.warning("N8N вернул пустой сгенерированный пост через callback")
+                    return None
             else:
-                logger.error(f"N8N вернул ошибку {response.status_code}: {response.text}")
-                raise N8NConnectionError(f"HTTP {response.status_code}")
+                logger.error("Не получен callback от N8N для генерации поста")
+                return None
                 
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Таймаут при генерации поста: {e}")
-            raise N8NTimeoutError("Превышено время ожидания генерации поста")
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"Ошибка подключения к N8N: {e}")
-            raise N8NConnectionError("Не удалось подключиться к серверу")
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Ошибка запроса к N8N: {e}")
-            raise N8NConnectionError(f"Ошибка запроса: {e}")
         except Exception as e:
-            logger.error(f"Неожиданная ошибка при генерации поста: {e}")
-            raise
+            logger.error(f"Ошибка при генерации поста: {e}")
+            return None
     
     @staticmethod
     def validate_user_answer(answer: str) -> Tuple[bool, str]:
