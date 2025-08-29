@@ -6,8 +6,22 @@
 import os
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения из файла .env
-load_dotenv()
+# Загружаем переменные окружения из файла config.env
+# Пробуем загрузить из разных возможных местоположений
+import pathlib
+config_paths = [
+    'config.env',  # Локально
+    '/app/config.env',  # В Docker контейнере
+    pathlib.Path(__file__).parent / 'config.env'  # Относительно этого файла
+]
+
+for config_path in config_paths:
+    if pathlib.Path(config_path).exists():
+        load_dotenv(config_path)
+        break
+else:
+    # Если файл не найден, пытаемся загрузить из переменных окружения Docker
+    load_dotenv()
 
 # Telegram Bot Configuration
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
