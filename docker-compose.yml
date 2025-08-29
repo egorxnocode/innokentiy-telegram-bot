@@ -9,17 +9,17 @@ services:
       # Telegram Bot
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       
-      # Supabase (внешний контейнер)
-      - SUPABASE_URL=${SUPABASE_URL}
+      # Supabase (подключение к существующему Kong gateway)
+      - SUPABASE_URL=http://supabase-kong:8000
       - SUPABASE_KEY=${SUPABASE_KEY}
       
       # OpenAI
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       
-      # N8N Webhooks (внешний контейнер)
-      - N8N_NICHE_WEBHOOK_URL=${N8N_NICHE_WEBHOOK_URL}
-      - N8N_TOPIC_WEBHOOK_URL=${N8N_TOPIC_WEBHOOK_URL}
-      - N8N_POST_WEBHOOK_URL=${N8N_POST_WEBHOOK_URL}
+      # N8N Webhooks (подключение к существующему N8N)
+      - N8N_NICHE_WEBHOOK_URL=http://n8n-n8n-1:5678/webhook/niche
+      - N8N_TOPIC_WEBHOOK_URL=http://n8n-n8n-1:5678/webhook/topic
+      - N8N_POST_WEBHOOK_URL=http://n8n-n8n-1:5678/webhook/post
       
       # Admin Notifications
       - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
@@ -27,15 +27,15 @@ services:
       
       # Bot Configuration
       - MAX_USERS=${MAX_USERS:-1000}
-      - DEBUG=${DEBUG:-False}
+      - DEBUG=${DEBUG:-True}
       
     volumes:
       - ./logs:/app/logs
       - ./config.env:/app/config.env:ro
     
     networks:
-      - bot-network
-      - external-services
+      - n8n_default
+      - supabase_default
     
     # Health check
     healthcheck:
@@ -63,13 +63,11 @@ services:
         max-file: "3"
 
 networks:
-  bot-network:
-    driver: bridge
-  
-  # Сеть для подключения к внешним сервисам (N8N, Supabase)
-  external-services:
+  # Подключение к существующим сетям
+  n8n_default:
     external: true
-    name: services-network
+  supabase_default:
+    external: true
 
 volumes:
   bot-logs:
