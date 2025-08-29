@@ -873,9 +873,10 @@ class TelegramBot:
             await self.app.initialize()
             await self.app.start()
             await self.app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-            # Ждем до получения сигнала остановки
-            # В новых версиях python-telegram-bot используется app.idle()
-            await self.app.idle()
+            # Просто ждем бесконечно - бот будет работать в фоне
+            logger.info("Бот запущен и работает...")
+            while True:
+                await asyncio.sleep(1)
         except Exception as e:
             logger.error(f"Ошибка в async run: {e}")
         finally:
