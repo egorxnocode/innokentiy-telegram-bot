@@ -1,10 +1,10 @@
-version: '3.8'
-
 services:
   telegram-bot:
     build: .
     container_name: innokentiy-bot
     restart: unless-stopped
+    env_file:
+      - config.env
     environment:
       # Telegram Bot
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
