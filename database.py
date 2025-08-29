@@ -289,8 +289,12 @@ class Database:
             response = self.supabase.rpc('increment_user_post_count', {'p_user_id': user_id}).execute()
             
             if response.data is not None:
-                # SQL функция возвращает boolean напрямую, не в массиве
-                result = response.data
+                # SQL функция возвращает boolean, но иногда может быть в массиве
+                if isinstance(response.data, list) and len(response.data) > 0:
+                    result = response.data[0]
+                else:
+                    result = response.data
+                    
                 logger.info(f"Счетчик постов пользователя {telegram_id} обновлен: {result}")
                 return bool(result)
             else:
