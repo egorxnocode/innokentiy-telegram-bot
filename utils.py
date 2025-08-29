@@ -146,19 +146,27 @@ class NicheDetector:
             response = requests.post(
                 N8N_NICHE_WEBHOOK_URL,
                 json=payload,
-                timeout=30,
+                timeout=180,  # 3 минуты таймаут
                 headers={'Content-Type': 'application/json'}
             )
             
+            logger.info(f"N8N ответил со статусом {response.status_code}")
+            logger.debug(f"Ответ от N8N: {response.text}")
+            
             if response.status_code == 200:
-                result = response.json()
-                niche = result.get('niche', '').strip()
-                
-                if niche:
-                    logger.info(f"Ниша успешно определена: {niche}")
-                    return niche
-                else:
-                    logger.warning("N8N webhook вернул пустую нишу")
+                try:
+                    result = response.json()
+                    logger.debug(f"Parsed JSON from N8N: {result}")
+                    niche = result.get('niche', '').strip()
+                    
+                    if niche:
+                        logger.info(f"Ниша успешно определена: {niche}")
+                        return niche
+                    else:
+                        logger.warning(f"N8N webhook вернул пустую нишу. Результат: {result}")
+                        return None
+                except ValueError as e:
+                    logger.error(f"N8N вернул некорректный JSON: {response.text}. Ошибка: {e}")
                     return None
             else:
                 logger.error(f"N8N webhook вернул статус {response.status_code}: {response.text}")
