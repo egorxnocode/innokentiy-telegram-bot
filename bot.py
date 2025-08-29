@@ -470,9 +470,7 @@ class TelegramBot:
                 # Пользователь хочет пересоздать пост
                 await self.handle_regenerate_post(query, context)
             
-            elif data == 'new_topic':
-                # Пользователь хочет новую тему
-                await self.handle_suggest_topic(query, context)
+# Удален обработчик new_topic - функция больше не нужна
         
         except Exception as e:
             logger.error(f"Ошибка в handle_callback_query: {e}")
@@ -717,8 +715,7 @@ class TelegramBot:
                 
                 # Создаем кнопку "Написать пост"
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(messages.BUTTON_WRITE_POST, callback_data='write_post')],
-                    [InlineKeyboardButton(messages.BUTTON_NEW_TOPIC, callback_data='new_topic')]
+                    [InlineKeyboardButton(messages.BUTTON_WRITE_POST, callback_data='write_post')]
                 ])
                 
                 if is_callback:
@@ -852,8 +849,7 @@ class TelegramBot:
                 
                 # Создаем кнопку "Заново"
                 keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(messages.BUTTON_REGENERATE, callback_data='regenerate_post')],
-                    [InlineKeyboardButton(messages.BUTTON_NEW_TOPIC, callback_data='new_topic')]
+                    [InlineKeyboardButton(messages.BUTTON_REGENERATE, callback_data='regenerate_post')]
                 ])
                 
                 await processing_message.edit_text(

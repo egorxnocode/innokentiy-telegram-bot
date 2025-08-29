@@ -313,7 +313,7 @@ ERROR_POST_TIMEOUT = """
 BUTTON_SUGGEST_TOPIC = "💡 Предложи мне тему"
 BUTTON_WRITE_POST = "📝 Написать пост"
 BUTTON_REGENERATE = "🔄 Заново"
-BUTTON_NEW_TOPIC = "🎯 Новая тема"
+# BUTTON_NEW_TOPIC удалена - функция больше не нужна
 
 # Обновленный профиль
 PROFILE_INFO = """
