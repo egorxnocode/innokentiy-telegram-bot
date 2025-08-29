@@ -60,6 +60,7 @@ class TelegramBot:
         self.app.add_handler(CommandHandler("start", self.start_command))
         self.app.add_handler(CommandHandler("help", self.help_command))
         self.app.add_handler(CommandHandler("profile", self.profile_command))
+        self.app.add_handler(CommandHandler("test_reminder", self.test_reminder_command))
         
         # Обработчики кнопок
         self.app.add_handler(CallbackQueryHandler(self.handle_callback_query))
@@ -544,6 +545,56 @@ class TelegramBot:
             logger.error(f"Ошибка в profile_command: {e}")
             await update.message.reply_text(
                 messages.ERROR_DATABASE,
+                parse_mode='HTML'
+            )
+    
+    async def test_reminder_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Тестовая команда для отправки напоминания о написании поста"""
+        try:
+            user = update.effective_user
+            telegram_id = user.id
+            
+            # Проверяем, что пользователь зарегистрирован
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
+            )
+            
+            if not current_user:
+                await update.message.reply_text(
+                    "❌ Пользователь не найден. Используйте /start для регистрации.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Получаем нишу пользователя
+            niche = current_user.get('niche', 'Ваша ниша')
+            
+            # Формируем текст напоминания
+            reminder_text = messages.DAILY_REMINDER.format(
+                niche=text_formatter.escape_html(niche)
+            )
+            
+            # Создаем кнопку "Предложи мне тему"
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    "💡 Предложи мне тему", 
+                    callback_data='suggest_topic'
+                )]
+            ])
+            
+            # Отправляем тестовое напоминание
+            await update.message.reply_text(
+                f"🧪 <b>ТЕСТОВОЕ НАПОМИНАНИЕ</b>\n\n{reminder_text}",
+                parse_mode='HTML',
+                reply_markup=keyboard
+            )
+            
+            logger.info(f"Тестовое напоминание отправлено пользователю {telegram_id}")
+            
+        except Exception as e:
+            logger.error(f"Ошибка в test_reminder_command: {e}")
+            await update.message.reply_text(
+                "❌ Произошла ошибка при отправке тестового напоминания.",
                 parse_mode='HTML'
             )
     
