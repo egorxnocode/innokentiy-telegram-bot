@@ -145,10 +145,15 @@ class ReminderScheduler:
                 now = datetime.now(self.timezone)
                 target_time = time(REMINDER_TIME_HOUR, REMINDER_TIME_MINUTE)
                 
+                # Каждый час логируем текущее время для диагностики
+                if now.minute == 0:
+                    logger.info(f"Планировщик работает. Текущее время: {now.strftime('%H:%M')} (Moscow), цель: {target_time.strftime('%H:%M')}")
+                
                 # Проверяем, наступило ли время для отправки напоминаний
                 if (now.time().hour == target_time.hour and 
                     now.time().minute == target_time.minute):
                     
+                    logger.info(f"Время рассылки! Запускаем отправку напоминаний в {now.strftime('%H:%M')}")
                     await self.send_daily_reminders()
                     
                     # Ждем минуту, чтобы не отправлять напоминания несколько раз
@@ -159,6 +164,7 @@ class ReminderScheduler:
                       now.time().hour == 0 and 
                       now.time().minute == 1):
                     
+                    logger.info(f"Понедельник 00:01! Обнуляем счетчики в {now.strftime('%H:%M')}")
                     await self.reset_weekly_counters()
                     await asyncio.sleep(60)  # Ждем минуту
                 else:

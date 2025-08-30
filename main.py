@@ -35,7 +35,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
                 "status": "healthy" if bot_manager.is_running else "unhealthy",
                 "timestamp": datetime.now().isoformat(),
                 "bot_running": bot_manager.is_running,
-                "scheduler_running": scheduler.running if hasattr(scheduler, 'running') else True
+                "scheduler_running": scheduler.is_running if hasattr(scheduler, 'is_running') else False
             }
             
             self.send_response(200)
@@ -68,7 +68,10 @@ class BotManager:
             logger.info("Запуск планировщика напоминаний...")
             self.scheduler_task = scheduler.start()
             if self.scheduler_task:
-                await self.scheduler_task
+                # Не ждем завершения - планировщик должен работать бесконечно
+                # Просто проверяем, что задача создана
+                await asyncio.sleep(0.1)  # Небольшая задержка для инициализации
+                logger.info("Планировщик успешно запущен")
         except Exception as e:
             logger.error(f"Ошибка в планировщике: {e}")
     
@@ -126,15 +129,17 @@ class BotManager:
         loop = asyncio.get_event_loop()
         health_future = loop.run_in_executor(self.executor, self.start_health_server)
         
-        # Создаем задачи для бота, планировщика и webhook сервера
+        # Запускаем планировщик сначала
+        await self.start_scheduler()
+        
+        # Создаем задачи для бота и webhook сервера
         bot_task = asyncio.create_task(self.start_bot())
-        scheduler_task = asyncio.create_task(self.start_scheduler())
         webhook_task = asyncio.create_task(self.start_webhook_server())
         
         try:
-            # Ждем завершения любой из задач
+            # Ждем завершения любой из задач (планировщик уже запущен в фоне)
             done, pending = await asyncio.wait(
-                [bot_task, scheduler_task, webhook_task, health_future],
+                [bot_task, webhook_task, health_future],
                 return_when=asyncio.FIRST_COMPLETED
             )
             
