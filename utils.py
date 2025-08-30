@@ -92,25 +92,29 @@ class VoiceProcessor:
             # Скачиваем файл
             voice_bytes = await voice_file.download_as_bytearray()
             
-            # Создаем временный файл для OpenAI API
-            temp_filename = f"voice_{voice_file.file_id}.ogg"
-            
-            with open(temp_filename, 'wb') as f:
-                f.write(voice_bytes)
-            
-            # Транскрибируем с помощью OpenAI Whisper
-            with open(temp_filename, 'rb') as audio_file:
-                transcript = openai.Audio.transcribe(
-                    model=OPENAI_TRANSCRIPTION_MODEL,
-                    file=audio_file,
-                    language="ru"  # Указываем русский язык
-                )
-            
-            # Удаляем временный файл
+            # Создаем временный файл в системной temp директории
+            import tempfile
             import os
-            os.remove(temp_filename)
             
-            transcribed_text = transcript['text'].strip()
+            with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_file:
+                temp_filename = temp_file.name
+                temp_file.write(voice_bytes)
+            
+            try:
+                # Транскрибируем с помощью OpenAI Whisper
+                with open(temp_filename, 'rb') as audio_file:
+                    client = openai.OpenAI()
+                    transcript = client.audio.transcriptions.create(
+                        model=OPENAI_TRANSCRIPTION_MODEL,
+                        file=audio_file,
+                        language="ru"  # Указываем русский язык
+                    )
+            finally:
+                # Всегда удаляем временный файл, даже при ошибке
+                if os.path.exists(temp_filename):
+                    os.remove(temp_filename)
+            
+            transcribed_text = transcript.text.strip()
             logger.info(f"Голосовое сообщение успешно транскрибировано: {transcribed_text[:100]}...")
             
             return transcribed_text
