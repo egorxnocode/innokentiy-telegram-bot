@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 
 from config import (
-    N8N_TOPIC_WEBHOOK_URL, N8N_POST_WEBHOOK_URL, MIN_POST_ANSWER_WORDS,
+    N8N_TOPIC_WEBHOOK_URL, N8N_POST_WEBHOOK_URL,
     N8N_TOPIC_TIMEOUT, N8N_POST_TIMEOUT, N8N_CONNECTION_TIMEOUT
 )
 from database import db
@@ -209,10 +209,9 @@ class PostSystem:
         if not answer or not answer.strip():
             return False, "Ответ не может быть пустым"
         
-        # Подсчитываем количество слов
+        # Подсчитываем количество слов для других проверок
         words = answer.strip().split()
-        if len(words) < MIN_POST_ANSWER_WORDS:
-            return False, f"Ответ слишком короткий. Минимум {MIN_POST_ANSWER_WORDS} слов"
+        # Убрано ограничение на минимальное количество слов
         
         # Проверяем на спам/однообразный текст
         unique_words = set(word.lower() for word in words)

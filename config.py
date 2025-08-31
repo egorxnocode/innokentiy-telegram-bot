@@ -93,7 +93,7 @@ MAX_VOICE_DURATION = 120  # секунд
 MAX_EMAIL_LENGTH = 255
 MAX_NICHE_LENGTH = 500
 MAX_POST_ANSWER_LENGTH = 2000
-MIN_POST_ANSWER_WORDS = 10
+# MIN_POST_ANSWER_WORDS удалено - ограничение на минимальное количество слов убрано
 WEEKLY_POST_LIMIT = 10
 
 # Настройки для голосовых сообщений
