@@ -252,7 +252,7 @@ class Database:
         """
         try:
             import os
-            reminder_day_file = "/app/active_reminder_day.txt"
+            reminder_day_file = "/app/logs/active_reminder_day.txt"
             
             if os.path.exists(reminder_day_file):
                 with open(reminder_day_file, 'r') as f:
@@ -281,7 +281,7 @@ class Database:
         """
         try:
             import os
-            reminder_day_file = "/app/active_reminder_day.txt"
+            reminder_day_file = "/app/logs/active_reminder_day.txt"
             
             # Валидация
             if not (1 <= day_of_month <= 31):
