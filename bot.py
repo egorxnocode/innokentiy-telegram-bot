@@ -446,8 +446,22 @@ class TelegramBot:
                     
                     await asyncio.sleep(1)
                     
-                    # Показываем главное меню
-                    await self.show_main_menu_after_registration(query, context)
+                    # Устанавливаем главное меню без дополнительного сообщения
+                    keyboard = ReplyKeyboardMarkup(
+                        MAIN_MENU_KEYBOARD,
+                        resize_keyboard=True,
+                        one_time_keyboard=False
+                    )
+                    
+                    # Просто обновляем inline keyboard на главное меню
+                    await query.message.edit_reply_markup(reply_markup=None)
+                    
+                    # Отправляем клавиатуру через бота без текстового сообщения
+                    await query.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text="🎯",  # Просто эмодзи
+                        reply_markup=keyboard
+                    )
                 
             elif data == 'niche_retry':
                 # Пользователь хочет попробовать еще раз
@@ -678,20 +692,7 @@ class TelegramBot:
             reply_markup=keyboard
         )
     
-    async def show_main_menu_after_registration(self, query, context: ContextTypes.DEFAULT_TYPE):
-        """Показать главное меню после регистрации"""
-        keyboard = ReplyKeyboardMarkup(
-            MAIN_MENU_KEYBOARD,
-            resize_keyboard=True,
-            one_time_keyboard=False
-        )
-        
-        await query.message.reply_text(
-            "<b>🏠 Главное меню</b>\n\nТеперь вы можете использовать бота!",
-            parse_mode='HTML',
-            reply_markup=keyboard
-        )
-    
+
     async def continue_registration(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_data: dict):
         """Продолжить регистрацию с текущего состояния"""
         state = user_data.get('state', BotStates.WAITING_EMAIL)
