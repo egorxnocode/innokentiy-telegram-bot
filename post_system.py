@@ -461,8 +461,16 @@ class PostSystem:
                 logger.warning(f"Не удалось сохранить пост для пользователя {telegram_id}")
                 return False, messages.ERROR_POST_GENERATION
             
+            # Получаем обновленную информацию о лимитах после сохранения поста
+            updated_limit_info = await retry_helper.retry_async_operation(
+                lambda: db.get_user_post_limits(telegram_id)
+            )
+            
+            remaining_attempts = updated_limit_info.get('posts_limit', 10) - updated_limit_info.get('posts_generated', 0)
+            
             return True, messages.GENERATED_POST.format(
-                generated_content=generated_content
+                generated_content=generated_content,
+                remaining_attempts=remaining_attempts
             )
             
         except Exception as e:
