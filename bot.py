@@ -1131,7 +1131,7 @@ class TelegramBot:
             limit_info = await retry_helper.retry_async_operation(
                 lambda: db.check_user_post_limit(telegram_id)
             )
-            remaining_attempts = limit_info.get('posts_limit', 10) - limit_info.get('posts_generated', 0)
+            remaining_attempts = limit_info.get('remaining_posts', 0)
             
             # Отправляем вопрос пользователю заново
             question_text = messages.POST_REGENERATE_QUESTION.format(

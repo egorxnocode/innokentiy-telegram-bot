@@ -466,7 +466,7 @@ class PostSystem:
                 lambda: db.check_user_post_limit(telegram_id)
             )
             
-            remaining_attempts = updated_limit_info.get('posts_limit', 10) - updated_limit_info.get('posts_generated', 0)
+            remaining_attempts = updated_limit_info.get('remaining_posts', 0)
             
             return True, messages.GENERATED_POST.format(
                 generated_content=generated_content,
