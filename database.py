@@ -199,7 +199,8 @@ class Database:
             list: Список пользователей с их данными
         """
         try:
-            response = self.supabase.table(USERS_TABLE).select("telegram_id, niche").eq("is_active", True).eq("state", "registered").execute()
+            # Получаем пользователей которые завершили регистрацию (registered или post_generated)
+            response = self.supabase.table(USERS_TABLE).select("telegram_id, niche").eq("is_active", True).in_("state", ["registered", "post_generated"]).execute()
             
             if response.data:
                 logger.info(f"Найдено {len(response.data)} пользователей для напоминаний")
