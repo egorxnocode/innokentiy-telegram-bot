@@ -376,7 +376,7 @@ class PostSystem:
                 return False, messages.ERROR_POST_GENERATION
             
             return True, messages.GENERATED_POST.format(
-                generated_content=text_formatter.escape_html(generated_content)
+                generated_content=generated_content
             )
             
         except Exception as e:
