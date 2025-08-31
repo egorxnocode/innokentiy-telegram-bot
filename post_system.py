@@ -137,7 +137,7 @@ class PostSystem:
             return None
     
     @staticmethod
-    async def generate_post_content(niche: str, topic: str, question: str, user_answer: str, post_goal: str = "Реакции") -> Optional[str]:
+    async def generate_post_content(niche: str, topic: str, question: str, user_answer: str, post_goal: str = "чтобы пост вызвал у человека эмоцию и желание поставить реакцию (сердце, огонь и так далее)") -> Optional[str]:
         """
         Генерирует контент поста на основе ответа пользователя через N8N
         
@@ -146,7 +146,7 @@ class PostSystem:
             topic (str): Тема поста
             question (str): Заданный вопрос
             user_answer (str): Ответ пользователя
-            post_goal (str): Цель поста (Реакции, Комментарии, Репосты, Сообщение в ЛС)
+            post_goal (str): Описание цели поста (подробное описание того, какую реакцию должен вызвать пост)
             
         Returns:
             Optional[str]: Сгенерированный пост
@@ -295,7 +295,7 @@ class PostSystem:
     
     @staticmethod
     async def process_post_generation(telegram_id: int, niche: str, content_data: Dict[str, Any], 
-                                    user_answer: str, post_goal: str = "Реакции") -> Tuple[bool, str]:
+                                    user_answer: str, post_goal: str = "чтобы пост вызвал у человека эмоцию и желание поставить реакцию (сердце, огонь и так далее)") -> Tuple[bool, str]:
         """
         Обрабатывает генерацию поста
         
@@ -304,7 +304,7 @@ class PostSystem:
             niche (str): Ниша пользователя
             content_data (Dict): Данные контента
             user_answer (str): Ответ пользователя
-            post_goal (str): Цель поста (Реакции, Комментарии, Репосты, Сообщение в ЛС)
+            post_goal (str): Описание цели поста (подробное описание того, какую реакцию должен вызвать пост)
             
         Returns:
             Tuple[bool, str]: (success, message)

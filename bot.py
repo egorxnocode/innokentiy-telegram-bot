@@ -888,10 +888,20 @@ class TelegramBot:
                 'goal_dm': 'Сообщение в ЛС'
             }
             
+            # Определяем описание цели для N8N webhook
+            goal_descriptions = {
+                'goal_reactions': 'чтобы пост вызвал у человека эмоцию и желание поставить реакцию (сердце, огонь и так далее)',
+                'goal_comments': 'чтобы после прочтения у человека было желание обсудить пост в комментариях или ответить автору на вопрос. Задача собрать максимальное количество комментариев',
+                'goal_reposts': 'чтобы после прочтения поста у человека появилось желание его сохранить и не потерять важную и полезную для него информацию',
+                'goal_dm': 'чтобы после прочтения поста у целевой аудитории появился интерес к услугам автора. Задача — собрать максимальное количество обращений в личные сообщения'
+            }
+            
             post_goal = goal_mapping.get(goal_data, 'Реакции')
+            post_goal_description = goal_descriptions.get(goal_data, goal_descriptions['goal_reactions'])
             
             # Сохраняем цель в контексте
             context.user_data['post_goal'] = post_goal
+            context.user_data['post_goal_description'] = post_goal_description
             
             # Переводим пользователя в состояние ожидания ответа
             await retry_helper.retry_async_operation(
@@ -954,6 +964,7 @@ class TelegramBot:
             
             # Получаем цель поста из контекста
             post_goal = context.user_data.get('post_goal', 'Реакции')  # По умолчанию "Реакции"
+            post_goal_description = context.user_data.get('post_goal_description', 'чтобы пост вызвал у человека эмоцию и желание поставить реакцию (сердце, огонь и так далее)')
             
             # Генерируем пост
             success, response_text = await post_system.process_post_generation(
@@ -961,7 +972,7 @@ class TelegramBot:
                 niche=niche,
                 content_data=content_data,
                 user_answer=text,
-                post_goal=post_goal
+                post_goal=post_goal_description  # Передаем описание вместо короткого названия
             )
             
             if success:
