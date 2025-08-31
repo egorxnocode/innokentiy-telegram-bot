@@ -199,8 +199,10 @@ class Database:
             list: Список пользователей с их данными
         """
         try:
-            # Получаем пользователей которые завершили регистрацию (registered или post_generated)
-            response = self.supabase.table(USERS_TABLE).select("telegram_id, niche").eq("is_active", True).in_("state", ["registered", "post_generated"]).execute()
+            # Получаем всех пользователей которые завершили регистрацию
+            # Исключаем только состояния незавершенной регистрации
+            incomplete_states = ["waiting_email", "email_verified", "waiting_niche_description", "waiting_niche_confirmation", "niche_confirmed"]
+            response = self.supabase.table(USERS_TABLE).select("telegram_id, niche").eq("is_active", True).not_.in_("state", incomplete_states).execute()
             
             if response.data:
                 logger.info(f"Найдено {len(response.data)} пользователей для напоминаний")
