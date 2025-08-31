@@ -1127,10 +1127,17 @@ class TelegramBot:
                 lambda: db.update_user_state(telegram_id, BotStates.WAITING_POST_ANSWER)
             )
             
+            # Получаем информацию о лимитах
+            limit_info = await retry_helper.retry_async_operation(
+                lambda: db.get_user_post_limits(telegram_id)
+            )
+            remaining_attempts = limit_info.get('posts_limit', 10) - limit_info.get('posts_generated', 0)
+            
             # Отправляем вопрос пользователю заново
             question_text = messages.POST_REGENERATE_QUESTION.format(
                 topic=text_formatter.escape_html(content_data.get('adapted_topic', content_data.get('topic'))),
-                question=text_formatter.escape_html(content_data.get('question', ''))
+                question=text_formatter.escape_html(content_data.get('question', '')),
+                remaining_attempts=remaining_attempts
             )
             
             await query.edit_message_text(
