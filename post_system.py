@@ -137,6 +137,31 @@ class PostSystem:
             return 1  # Безопасное значение по умолчанию
     
     @staticmethod
+    def _clean_html_for_telegram(content: str) -> str:
+        """
+        Очищает HTML от неподдерживаемых Telegram тегов
+        Telegram поддерживает только: <b>, <i>, <u>, <s>, <code>, <pre>, <a>
+        """
+        import re
+        
+        # Заменяем неподдерживаемые теги на поддерживаемые
+        content = re.sub(r'<p>', '', content)
+        content = re.sub(r'</p>', '\n\n', content)
+        content = re.sub(r'<strong>', '<b>', content)
+        content = re.sub(r'</strong>', '</b>', content)
+        content = re.sub(r'<em>', '<i>', content)
+        content = re.sub(r'</em>', '</i>', content)
+        
+        # Удаляем другие неподдерживаемые теги, оставляя текст
+        content = re.sub(r'</?(?:div|span|h[1-6]|ul|ol|li|br)[^>]*>', '', content)
+        
+        # Убираем лишние переносы строк
+        content = re.sub(r'\n{3,}', '\n\n', content)
+        content = content.strip()
+        
+        return content
+    
+    @staticmethod
     async def adapt_topic_for_niche(topic: str, niche: str) -> Optional[str]:
         """
         Адаптирует универсальную тему под нишу пользователя через N8N
@@ -417,6 +442,9 @@ class PostSystem:
             
             if not generated_content:
                 return False, messages.ERROR_POST_GENERATION
+            
+            # Очищаем HTML от неподдерживаемых тегов
+            generated_content = PostSystem._clean_html_for_telegram(generated_content)
             
             # Сохраняем пост (новая простая система)
             save_success = await retry_helper.retry_async_operation(
