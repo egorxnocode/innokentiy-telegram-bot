@@ -299,6 +299,27 @@ class Database:
             logger.error(f"Ошибка при установке активного дня рассылки: {e}")
             return False
 
+    async def clear_active_reminder_day(self) -> bool:
+        """
+        Очищает активный день рассылки (возвращает к использованию текущего дня)
+        
+        Returns:
+            bool: Успешность операции
+        """
+        try:
+            import os
+            reminder_day_file = "/tmp/active_reminder_day.txt"
+            
+            if os.path.exists(reminder_day_file):
+                os.remove(reminder_day_file)
+                logger.info("Тестовый день очищен, возвращаемся к текущему дню")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка при очистке активного дня: {e}")
+            return False
+
     async def check_user_post_limit(self, telegram_id: int) -> Dict[str, Any]:
         """
         Проверяет лимит постов пользователя используя счетчик в таблице users

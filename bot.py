@@ -63,6 +63,7 @@ class TelegramBot:
         self.app.add_handler(CommandHandler("profile", self.profile_command))
         self.app.add_handler(CommandHandler("test_reminder", self.test_reminder_command))
         self.app.add_handler(CommandHandler("send_daily_reminders", self.send_daily_reminders_command))
+        self.app.add_handler(CommandHandler("clear_test_day", self.clear_test_day_command))
         
         # Обработчики кнопок
         self.app.add_handler(CallbackQueryHandler(self.handle_callback_query))
@@ -161,7 +162,8 @@ class TelegramBot:
 <b>🔧 Админские команды:</b>
 • /test_reminder - Отправить тестовое напоминание себе
 • /send_daily_reminders - Запустить ручную рассылку напоминаний всем пользователям
-• /send_daily_reminders 5 - Отправить напоминания конкретного дня (1-31)
+• /send_daily_reminders 5 - Отправить напоминания конкретного дня (1-31) [ТЕСТИРОВАНИЕ]
+• /clear_test_day - Очистить тестовый день (вернуться к текущему дню)
 """
         
         help_text += """
@@ -722,6 +724,45 @@ class TelegramBot:
             logger.error(f"Ошибка в send_daily_reminders_command: {e}")
             await update.message.reply_text(
                 "❌ Произошла ошибка при отправке ежедневных напоминаний.",
+                parse_mode='HTML'
+            )
+    
+    async def clear_test_day_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Админская команда для очистки тестового дня (возврат к текущему дню)"""
+        try:
+            user = update.effective_user
+            telegram_id = user.id
+            
+            # Проверяем, что это админ
+            if str(telegram_id) != ADMIN_CHAT_ID:
+                await update.message.reply_text(
+                    "❌ У вас нет прав для выполнения этой команды.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Очищаем тестовый день
+            success = await retry_helper.retry_async_operation(
+                lambda: db.clear_active_reminder_day()
+            )
+            
+            if success:
+                await update.message.reply_text(
+                    "✅ <b>Тестовый день очищен!</b>\n\n"
+                    "Теперь темы будут браться из текущего календарного дня.",
+                    parse_mode='HTML'
+                )
+                logger.info(f"Админ {telegram_id} очистил тестовый день")
+            else:
+                await update.message.reply_text(
+                    "❌ Ошибка при очистке тестового дня.",
+                    parse_mode='HTML'
+                )
+            
+        except Exception as e:
+            logger.error(f"Ошибка в clear_test_day_command: {e}")
+            await update.message.reply_text(
+                "❌ Произошла ошибка при очистке тестового дня.",
                 parse_mode='HTML'
             )
     

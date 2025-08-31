@@ -80,18 +80,20 @@ class PostSystem:
     @staticmethod
     async def get_current_reminder_day() -> int:
         """
-        Получает текущий день для рассылки и генерации контента
+        Получает день для генерации контента (темы)
+        Используется только для предложения тем пользователям, НЕ для автоматической рассылки
         
         Returns:
             int: День месяца (1-31)
         """
         try:
-            # Проверяем, есть ли сохраненный день рассылки в базе
+            # Проверяем, есть ли сохраненный тестовый день (установленный админской командой)
             saved_day = await db.get_active_reminder_day()
             if saved_day:
+                logger.info(f"Используем тестовый день для генерации тем: {saved_day}")
                 return saved_day
             
-            # Если нет сохраненного дня, используем текущий
+            # Если нет тестового дня, используем текущий календарный день
             today = datetime.now()
             day_of_month = today.day
             
@@ -104,10 +106,35 @@ class PostSystem:
             return day_of_month
             
         except Exception as e:
-            logger.error(f"Ошибка при получении текущего дня рассылки: {e}")
+            logger.error(f"Ошибка при получении дня для тем: {e}")
             # В случае ошибки возвращаем текущий день
             today = datetime.now()
             return max(1, min(31, today.day))
+    
+    @staticmethod
+    def get_actual_current_day() -> int:
+        """
+        Получает РЕАЛЬНЫЙ текущий день для автоматической рассылки
+        Эта функция ВСЕГДА возвращает текущий календарный день
+        
+        Returns:
+            int: Текущий день месяца (1-31)
+        """
+        try:
+            today = datetime.now()
+            day_of_month = today.day
+            
+            # Для дней больше 31 берем последний день
+            if day_of_month > 31:
+                day_of_month = 31
+            elif day_of_month < 1:
+                day_of_month = 1
+                
+            return day_of_month
+            
+        except Exception as e:
+            logger.error(f"Ошибка при получении текущего дня: {e}")
+            return 1  # Безопасное значение по умолчанию
     
     @staticmethod
     async def adapt_topic_for_niche(topic: str, niche: str) -> Optional[str]:

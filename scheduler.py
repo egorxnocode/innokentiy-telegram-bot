@@ -41,14 +41,15 @@ class ReminderScheduler:
         """
         try:
             if specific_day:
-                logger.info(f"Начинаем отправку напоминаний для дня {specific_day}")
+                logger.info(f"Начинаем РУЧНУЮ отправку напоминаний для дня {specific_day}")
                 day_of_month = specific_day
             else:
-                logger.info("Начинаем отправку ежедневных напоминаний")
-                # Получаем контент дня из базы данных
+                logger.info("Начинаем АВТОМАТИЧЕСКУЮ отправку ежедневных напоминаний")
+                # ВАЖНО: Автоматическая рассылка ВСЕГДА использует реальный текущий день
                 from datetime import datetime
                 today = datetime.now()
                 day_of_month = today.day
+                logger.info(f"Используем РЕАЛЬНЫЙ текущий день: {day_of_month}")
             
             # Для дней больше 31 берем последний день
             if day_of_month > 31:
