@@ -32,19 +32,29 @@ class ReminderScheduler:
         self.is_running = False
         self.timezone = pytz.timezone(TIMEZONE)
     
-    async def send_daily_reminders(self):
-        """Отправляет ежедневные напоминания всем активным пользователям"""
+    async def send_daily_reminders(self, specific_day: int = None):
+        """Отправляет ежедневные напоминания всем активным пользователям
+        
+        Args:
+            specific_day (int, optional): Номер дня (1-31) для отправки. 
+                                        Если не указан, используется текущий день.
+        """
         try:
-            logger.info("Начинаем отправку ежедневных напоминаний")
-            
-            # Получаем контент дня из базы данных
-            from datetime import datetime
-            today = datetime.now()
-            day_of_month = today.day
+            if specific_day:
+                logger.info(f"Начинаем отправку напоминаний для дня {specific_day}")
+                day_of_month = specific_day
+            else:
+                logger.info("Начинаем отправку ежедневных напоминаний")
+                # Получаем контент дня из базы данных
+                from datetime import datetime
+                today = datetime.now()
+                day_of_month = today.day
             
             # Для дней больше 31 берем последний день
             if day_of_month > 31:
                 day_of_month = 31
+            elif day_of_month < 1:
+                day_of_month = 1
             
             daily_content = await retry_helper.retry_async_operation(
                 lambda: db.get_daily_content(day_of_month)
