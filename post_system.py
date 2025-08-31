@@ -463,7 +463,7 @@ class PostSystem:
             
             # Получаем обновленную информацию о лимитах после сохранения поста
             updated_limit_info = await retry_helper.retry_async_operation(
-                lambda: db.get_user_post_limits(telegram_id)
+                lambda: db.check_user_post_limit(telegram_id)
             )
             
             remaining_attempts = updated_limit_info.get('posts_limit', 10) - updated_limit_info.get('posts_generated', 0)
