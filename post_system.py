@@ -137,7 +137,7 @@ class PostSystem:
             return None
     
     @staticmethod
-    async def generate_post_content(niche: str, topic: str, question: str, user_answer: str) -> Optional[str]:
+    async def generate_post_content(niche: str, topic: str, question: str, user_answer: str, post_goal: str = "Реакции") -> Optional[str]:
         """
         Генерирует контент поста на основе ответа пользователя через N8N
         
@@ -146,6 +146,7 @@ class PostSystem:
             topic (str): Тема поста
             question (str): Заданный вопрос
             user_answer (str): Ответ пользователя
+            post_goal (str): Цель поста (Реакции, Комментарии, Репосты, Сообщение в ЛС)
             
         Returns:
             Optional[str]: Сгенерированный пост
@@ -163,6 +164,7 @@ class PostSystem:
                 'topic': topic,
                 'question': question,
                 'user_answer': user_answer,
+                'post_goal': post_goal,
                 'language': 'ru'
             }
             
@@ -293,7 +295,7 @@ class PostSystem:
     
     @staticmethod
     async def process_post_generation(telegram_id: int, niche: str, content_data: Dict[str, Any], 
-                                    user_answer: str) -> Tuple[bool, str]:
+                                    user_answer: str, post_goal: str = "Реакции") -> Tuple[bool, str]:
         """
         Обрабатывает генерацию поста
         
@@ -302,6 +304,7 @@ class PostSystem:
             niche (str): Ниша пользователя
             content_data (Dict): Данные контента
             user_answer (str): Ответ пользователя
+            post_goal (str): Цель поста (Реакции, Комментарии, Репосты, Сообщение в ЛС)
             
         Returns:
             Tuple[bool, str]: (success, message)
@@ -329,7 +332,8 @@ class PostSystem:
                     niche=niche,
                     topic=content_data.get('adapted_topic', content_data.get('topic')),
                     question=content_data.get('question', ''),
-                    user_answer=user_answer
+                    user_answer=user_answer,
+                    post_goal=post_goal
                 )
             except N8NTimeoutError:
                 # Получаем информацию о пользователе для уведомления

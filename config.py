@@ -70,6 +70,7 @@ class BotStates:
     WAITING_NICHE_CONFIRMATION = 'waiting_niche_confirmation'
     NICHE_CONFIRMED = 'niche_confirmed'
     REGISTERED = 'registered'
+    WAITING_POST_GOAL = 'waiting_post_goal'
     WAITING_POST_ANSWER = 'waiting_post_answer'
     POST_GENERATED = 'post_generated'
 

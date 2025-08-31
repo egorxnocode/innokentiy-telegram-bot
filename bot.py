@@ -482,6 +482,10 @@ class TelegramBot:
                 # Пользователь хочет пересоздать пост
                 await self.handle_regenerate_post(query, context)
             
+            elif data.startswith('goal_'):
+                # Пользователь выбрал цель поста
+                await self.handle_goal_selection(query, context, data)
+            
 # Удален обработчик new_topic - функция больше не нужна
         
         except Exception as e:
@@ -830,14 +834,74 @@ class TelegramBot:
                 )
                 return
             
+            # Переводим пользователя в состояние ожидания выбора цели
+            await retry_helper.retry_async_operation(
+                lambda: db.update_user_state(telegram_id, BotStates.WAITING_POST_GOAL)
+            )
+            
+            # Создаем кнопки для выбора цели поста
+            goal_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Реакции", callback_data='goal_reactions')],
+                [InlineKeyboardButton("Комментарии", callback_data='goal_comments')],
+                [InlineKeyboardButton("Репосты", callback_data='goal_reposts')],
+                [InlineKeyboardButton("Сообщение в ЛС", callback_data='goal_dm')]
+            ])
+            
+            # Отправляем сообщение с выбором цели
+            goal_text = messages.POST_GOAL_SELECTION.format(
+                topic=text_formatter.escape_html(content_data.get('adapted_topic', content_data.get('topic')))
+            )
+            
+            await query.edit_message_text(
+                goal_text,
+                parse_mode='HTML',
+                reply_markup=goal_keyboard
+            )
+        
+        except Exception as e:
+            logger.error(f"Ошибка в handle_write_post_request: {e}")
+            await query.edit_message_text(
+                messages.ERROR_GENERAL,
+                parse_mode='HTML'
+            )
+    
+    async def handle_goal_selection(self, query, context: ContextTypes.DEFAULT_TYPE, goal_data: str):
+        """Обработка выбора цели поста"""
+        try:
+            user = query.from_user
+            telegram_id = user.id
+            
+            # Получаем данные контента из контекста
+            content_data = context.user_data.get('current_content')
+            if not content_data:
+                await query.edit_message_text(
+                    "Данные контента не найдены. Пожалуйста, запросите тему заново.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Определяем цель поста на основе callback_data
+            goal_mapping = {
+                'goal_reactions': 'Реакции',
+                'goal_comments': 'Комментарии', 
+                'goal_reposts': 'Репосты',
+                'goal_dm': 'Сообщение в ЛС'
+            }
+            
+            post_goal = goal_mapping.get(goal_data, 'Реакции')
+            
+            # Сохраняем цель в контексте
+            context.user_data['post_goal'] = post_goal
+            
             # Переводим пользователя в состояние ожидания ответа
             await retry_helper.retry_async_operation(
                 lambda: db.update_user_state(telegram_id, BotStates.WAITING_POST_ANSWER)
             )
             
-            # Отправляем вопрос пользователю
+            # Отправляем вопрос пользователю с указанием цели
             question_text = messages.POST_QUESTION.format(
                 topic=text_formatter.escape_html(content_data.get('adapted_topic', content_data.get('topic'))),
+                goal=text_formatter.escape_html(post_goal),
                 question=text_formatter.escape_html(content_data.get('question', ''))
             )
             
@@ -847,7 +911,7 @@ class TelegramBot:
             )
         
         except Exception as e:
-            logger.error(f"Ошибка в handle_write_post_request: {e}")
+            logger.error(f"Ошибка в handle_goal_selection: {e}")
             await query.edit_message_text(
                 messages.ERROR_GENERAL,
                 parse_mode='HTML'
@@ -888,12 +952,16 @@ class TelegramBot:
                 parse_mode='HTML'
             )
             
+            # Получаем цель поста из контекста
+            post_goal = context.user_data.get('post_goal', 'Реакции')  # По умолчанию "Реакции"
+            
             # Генерируем пост
             success, response_text = await post_system.process_post_generation(
                 telegram_id=telegram_id,
                 niche=niche,
                 content_data=content_data,
-                user_answer=text
+                user_answer=text,
+                post_goal=post_goal
             )
             
             if success:
