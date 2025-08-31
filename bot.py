@@ -535,7 +535,7 @@ class TelegramBot:
             await update.message.reply_text(
                 profile_text,
                 parse_mode='HTML',
-                reply_markup=main_keyboard
+                reply_markup=keyboard
             )
         
         except Exception as e:
