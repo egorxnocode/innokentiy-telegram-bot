@@ -506,6 +506,11 @@ class TelegramBot:
 # Удален обработчик new_topic - функция больше не нужна
         
         except Exception as e:
+            # Проверяем, не является ли ошибка "message is not modified"
+            if "message is not modified" in str(e).lower():
+                logger.debug(f"Сообщение уже в нужном состоянии: {e}")
+                return
+            
             logger.error(f"Ошибка в handle_callback_query: {e}")
             await query.message.reply_text(
                 messages.ERROR_GENERAL,
@@ -901,6 +906,11 @@ class TelegramBot:
                     )
         
         except Exception as e:
+            # Проверяем, не является ли ошибка "message is not modified"
+            if "message is not modified" in str(e).lower():
+                logger.debug(f"Сообщение уже в нужном состоянии: {e}")
+                return
+            
             logger.error(f"Ошибка в handle_suggest_topic: {e}")
             error_text = messages.ERROR_GENERAL
             if hasattr(query_or_update, 'edit_message_text'):
@@ -948,6 +958,11 @@ class TelegramBot:
             )
         
         except Exception as e:
+            # Проверяем, не является ли ошибка "message is not modified"
+            if "message is not modified" in str(e).lower():
+                logger.debug(f"Сообщение уже в нужном состоянии: {e}")
+                return
+            
             logger.error(f"Ошибка в handle_write_post_request: {e}")
             await query.edit_message_text(
                 messages.ERROR_GENERAL,
@@ -1010,6 +1025,11 @@ class TelegramBot:
             )
         
         except Exception as e:
+            # Проверяем, не является ли ошибка "message is not modified"
+            if "message is not modified" in str(e).lower():
+                logger.debug(f"Сообщение уже в нужном состоянии: {e}")
+                return
+            
             logger.error(f"Ошибка в handle_goal_selection: {e}")
             await query.edit_message_text(
                 messages.ERROR_GENERAL,
@@ -1146,6 +1166,11 @@ class TelegramBot:
             )
         
         except Exception as e:
+            # Проверяем, не является ли ошибка "message is not modified"
+            if "message is not modified" in str(e).lower():
+                logger.debug(f"Сообщение уже в нужном состоянии: {e}")
+                return
+            
             logger.error(f"Ошибка в handle_regenerate_post: {e}")
             await query.edit_message_text(
                 messages.ERROR_GENERAL,
