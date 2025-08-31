@@ -62,6 +62,7 @@ class TelegramBot:
         self.app.add_handler(CommandHandler("help", self.help_command))
         self.app.add_handler(CommandHandler("profile", self.profile_command))
         self.app.add_handler(CommandHandler("test_reminder", self.test_reminder_command))
+        self.app.add_handler(CommandHandler("send_daily_reminders", self.send_daily_reminders_command))
         
         # Обработчики кнопок
         self.app.add_handler(CallbackQueryHandler(self.handle_callback_query))
@@ -136,6 +137,9 @@ class TelegramBot:
     @telegram_error_handler
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /help"""
+        user = update.effective_user
+        telegram_id = user.id
+        
         help_text = """
 <b>🤖 Помощь по боту</b>
 
@@ -149,7 +153,17 @@ class TelegramBot:
 • 🎯 Определение вашей ниши деятельности
 • 💬 Поддержка голосовых сообщений
 • ⏰ Ежедневные напоминания о постах
-
+"""
+        
+        # Добавляем админские команды для админа
+        if str(telegram_id) == ADMIN_CHAT_ID:
+            help_text += """
+<b>🔧 Админские команды:</b>
+• /test_reminder - Отправить тестовое напоминание себе
+• /send_daily_reminders - Запустить ручную рассылку напоминаний всем пользователям
+"""
+        
+        help_text += """
 <b>Поддержка:</b>
 Если у вас возникли проблемы, обратитесь в поддержку.
         """
@@ -600,6 +614,49 @@ class TelegramBot:
             logger.error(f"Ошибка в test_reminder_command: {e}")
             await update.message.reply_text(
                 "❌ Произошла ошибка при отправке тестового напоминания.",
+                parse_mode='HTML'
+            )
+    
+    async def send_daily_reminders_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Админская команда для ручной отправки ежедневных напоминаний всем пользователям"""
+        try:
+            user = update.effective_user
+            telegram_id = user.id
+            
+            # Проверяем, что это админ
+            if str(telegram_id) != ADMIN_CHAT_ID:
+                await update.message.reply_text(
+                    "❌ У вас нет прав для выполнения этой команды.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Отправляем сообщение о начале процесса
+            status_message = await update.message.reply_text(
+                "🔄 <b>Запускаю ручную рассылку ежедневных напоминаний...</b>\n\n"
+                "Это может занять некоторое время.",
+                parse_mode='HTML'
+            )
+            
+            # Импортируем планировщик для использования его логики
+            from scheduler import scheduler
+            
+            # Запускаем рассылку с помощью существующего метода планировщика
+            await scheduler.send_daily_reminders()
+            
+            # Отправляем сообщение об успешном завершении
+            await status_message.edit_text(
+                "✅ <b>Ручная рассылка ежедневных напоминаний завершена!</b>\n\n"
+                "Все пользователи с завершенной регистрацией получили напоминания.",
+                parse_mode='HTML'
+            )
+            
+            logger.info(f"Админ {telegram_id} запустил ручную рассылку ежедневных напоминаний")
+            
+        except Exception as e:
+            logger.error(f"Ошибка в send_daily_reminders_command: {e}")
+            await update.message.reply_text(
+                "❌ Произошла ошибка при отправке ежедневных напоминаний.",
                 parse_mode='HTML'
             )
     
