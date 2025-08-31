@@ -243,6 +243,62 @@ class Database:
             logger.error(f"Ошибка при получении контента для дня {day_of_month}: {e}")
             raise
 
+    async def get_active_reminder_day(self) -> Optional[int]:
+        """
+        Получает активный день рассылки из файла настроек
+        
+        Returns:
+            Optional[int]: День месяца (1-31) или None если не установлен
+        """
+        try:
+            import os
+            reminder_day_file = "/app/active_reminder_day.txt"
+            
+            if os.path.exists(reminder_day_file):
+                with open(reminder_day_file, 'r') as f:
+                    day_str = f.read().strip()
+                    if day_str.isdigit():
+                        day = int(day_str)
+                        if 1 <= day <= 31:
+                            logger.info(f"Загружен активный день рассылки: {day}")
+                            return day
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Ошибка при получении активного дня рассылки: {e}")
+            return None
+
+    async def set_active_reminder_day(self, day_of_month: int) -> bool:
+        """
+        Устанавливает активный день рассылки в файл
+        
+        Args:
+            day_of_month (int): День месяца (1-31)
+            
+        Returns:
+            bool: Успешность операции
+        """
+        try:
+            import os
+            reminder_day_file = "/app/active_reminder_day.txt"
+            
+            # Валидация
+            if not (1 <= day_of_month <= 31):
+                logger.error(f"Неверный день месяца: {day_of_month}")
+                return False
+            
+            # Сохраняем в файл
+            with open(reminder_day_file, 'w') as f:
+                f.write(str(day_of_month))
+            
+            logger.info(f"Сохранен активный день рассылки: {day_of_month}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка при установке активного дня рассылки: {e}")
+            return False
+
     async def check_user_post_limit(self, telegram_id: int) -> Dict[str, Any]:
         """
         Проверяет лимит постов пользователя используя счетчик в таблице users

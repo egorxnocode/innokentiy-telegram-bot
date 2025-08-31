@@ -692,6 +692,12 @@ class TelegramBot:
                 parse_mode='HTML'
             )
             
+            # Если указан конкретный день, сохраняем его как активный
+            if specific_day:
+                await retry_helper.retry_async_operation(
+                    lambda: db.set_active_reminder_day(specific_day)
+                )
+            
             # Импортируем планировщик для использования его логики
             from scheduler import scheduler
             

@@ -58,18 +58,14 @@ class PostSystem:
     @staticmethod
     async def get_content_for_today() -> Optional[Dict[str, Any]]:
         """
-        Получает контент для текущего дня (сообщение + тема + вопрос)
+        Получает контент для текущего активного дня (сообщение + тема + вопрос)
         
         Returns:
             Optional[Dict]: Данные контента или None
         """
         try:
-            today = datetime.now()
-            day_of_month = today.day
-            
-            # Для дней больше 31 (например, если в месяце 30 дней) берем последний день
-            if day_of_month > 31:
-                day_of_month = 31
+            # Получаем активный день рассылки
+            day_of_month = await PostSystem.get_current_reminder_day()
             
             content_data = await retry_helper.retry_async_operation(
                 lambda: db.get_daily_content(day_of_month)
@@ -80,6 +76,38 @@ class PostSystem:
         except Exception as e:
             logger.error(f"Ошибка при получении контента дня: {e}")
             return None
+    
+    @staticmethod
+    async def get_current_reminder_day() -> int:
+        """
+        Получает текущий день для рассылки и генерации контента
+        
+        Returns:
+            int: День месяца (1-31)
+        """
+        try:
+            # Проверяем, есть ли сохраненный день рассылки в базе
+            saved_day = await db.get_active_reminder_day()
+            if saved_day:
+                return saved_day
+            
+            # Если нет сохраненного дня, используем текущий
+            today = datetime.now()
+            day_of_month = today.day
+            
+            # Для дней больше 31 берем последний день
+            if day_of_month > 31:
+                day_of_month = 31
+            elif day_of_month < 1:
+                day_of_month = 1
+                
+            return day_of_month
+            
+        except Exception as e:
+            logger.error(f"Ошибка при получении текущего дня рассылки: {e}")
+            # В случае ошибки возвращаем текущий день
+            today = datetime.now()
+            return max(1, min(31, today.day))
     
     @staticmethod
     async def adapt_topic_for_niche(topic: str, niche: str) -> Optional[str]:
