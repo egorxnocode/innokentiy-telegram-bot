@@ -407,13 +407,12 @@ class TelegramBot:
         """Обработчик callback query от inline кнопок"""
         try:
             query = update.callback_query
-            await query.answer()
-            
             user = query.from_user
             telegram_id = user.id
             data = query.data
             
             if data == 'niche_correct':
+                await query.answer()
                 # Пользователь подтвердил нишу
                 temp_niche = context.user_data.get('temp_niche')
                 
@@ -467,6 +466,7 @@ class TelegramBot:
                     )
                 
             elif data == 'niche_retry':
+                await query.answer()
                 # Пользователь хочет попробовать еще раз
                 await query.edit_message_text(
                     messages.NICHE_RETRY,
@@ -477,6 +477,7 @@ class TelegramBot:
                 context.user_data.pop('temp_niche', None)
             
             elif data == 'change_niche':
+                await query.answer()
                 # Пользователь хочет изменить нишу
                 await retry_helper.retry_async_operation(
                     lambda: db.update_user_state(telegram_id, BotStates.WAITING_NICHE_DESCRIPTION)
@@ -488,18 +489,22 @@ class TelegramBot:
                 )
             
             elif data == 'suggest_topic':
+                await query.answer()
                 # Пользователь запросил предложение темы
                 await self.handle_suggest_topic(query, context)
             
             elif data == 'write_post':
+                await query.answer()
                 # Пользователь хочет написать пост
                 await self.handle_write_post_request(query, context)
             
             elif data == 'regenerate_post':
+                await query.answer()
                 # Пользователь хочет пересоздать пост
                 await self.handle_regenerate_post(query, context)
             
             elif data.startswith('goal_'):
+                await query.answer()
                 # Пользователь выбрал цель поста
                 await self.handle_goal_selection(query, context, data)
             
