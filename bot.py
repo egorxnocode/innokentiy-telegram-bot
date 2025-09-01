@@ -558,7 +558,6 @@ class TelegramBot:
             profile_text = messages.PROFILE_INFO.format(
                 email=text_formatter.escape_html(current_user.get('email', 'Не указан')),
                 niche=text_formatter.escape_html(current_user.get('niche', 'Не определена')),
-                subscription=messages.SUBSCRIPTION_INACTIVE,  # Пока что неактивна
                 registration_date=reg_date,
                 posts_generated=limit_info.get('posts_generated', 0),
                 posts_limit=limit_info.get('posts_limit', 10),
