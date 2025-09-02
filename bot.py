@@ -183,7 +183,12 @@ class TelegramBot:
         try:
             user = update.effective_user
             telegram_id = user.id
-            text = update.message.text.strip()
+            message = update.effective_message
+            
+            if not message or not message.text:
+                return
+                
+            text = message.text.strip()
             
             # Получаем текущего пользователя
             current_user = await retry_helper.retry_async_operation(
@@ -211,10 +216,14 @@ class TelegramBot:
         
         except Exception as e:
             logger.error(f"Ошибка в handle_text_message: {e}")
-            await update.message.reply_text(
-                messages.ERROR_GENERAL,
-                parse_mode='HTML'
-            )
+            message = update.effective_message
+            if message:
+                await message.reply_text(
+                    messages.ERROR_GENERAL,
+                    parse_mode='HTML'
+                )
+            else:
+                logger.error(f"Не удалось отправить сообщение об ошибке - нет effective_message")
     
     async def handle_email_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Обработка ввода email"""
