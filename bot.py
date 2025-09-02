@@ -61,6 +61,7 @@ class TelegramBot:
         self.app.add_handler(CommandHandler("start", self.start_command))
         self.app.add_handler(CommandHandler("help", self.help_command))
         self.app.add_handler(CommandHandler("profile", self.profile_command))
+        self.app.add_handler(CommandHandler("menu", self.menu_command))
         self.app.add_handler(CommandHandler("test_reminder", self.test_reminder_command))
         self.app.add_handler(CommandHandler("send_daily_reminders", self.send_daily_reminders_command))
         self.app.add_handler(CommandHandler("clear_test_day", self.clear_test_day_command))
@@ -147,6 +148,7 @@ class TelegramBot:
 <b>Команды:</b>
 • /start - Начать работу или вернуться в главное меню
 • /profile - Показать профиль
+• /menu - Обновить меню (если кнопки не отображаются)
 • /help - Показать эту справку
 
 <b>Возможности:</b>
@@ -154,6 +156,9 @@ class TelegramBot:
 • 🎯 Определение вашей ниши деятельности
 • 💬 Поддержка голосовых сообщений
 • ⏰ Ежедневные напоминания о постах
+
+<b>💡 Если у вас нет кнопки «👤 Профиль»:</b>
+Используйте команду /menu для обновления меню.
 """
         
         # Добавляем админские команды для админа
@@ -804,11 +809,56 @@ class TelegramBot:
         )
         
         await update.message.reply_text(
-            "Добро пожаловать! Используйте кнопки меню ниже.",
+            "Добро пожаловать! Используйте кнопки меню ниже.\n\n"
+            "🔄 <i>Если кнопка «👤 Профиль» не отображается, используйте команду /menu для обновления меню.</i>",
             parse_mode='HTML',
             reply_markup=keyboard
         )
     
+    async def menu_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Принудительно обновить главное меню для зарегистрированного пользователя"""
+        try:
+            user = update.effective_user
+            telegram_id = user.id
+            
+            # Проверяем, что пользователь зарегистрирован
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
+            )
+            
+            if not current_user:
+                await update.message.reply_text(
+                    "Пользователь не найден. Используйте /start для регистрации.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            if current_user['state'] != BotStates.REGISTERED:
+                await update.message.reply_text(
+                    "Завершите регистрацию, используя /start",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Принудительно устанавливаем актуальное меню
+            keyboard = ReplyKeyboardMarkup(
+                MAIN_MENU_KEYBOARD,
+                resize_keyboard=True,
+                one_time_keyboard=False
+            )
+            
+            await update.message.reply_text(
+                "🔄 Меню обновлено! Теперь у вас есть кнопка «👤 Профиль».",
+                parse_mode='HTML',
+                reply_markup=keyboard
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка в menu_command: {e}")
+            await update.message.reply_text(
+                "❌ Произошла ошибка при обновлении меню.",
+                parse_mode='HTML'
+            )
 
     async def continue_registration(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_data: dict):
         """Продолжить регистрацию с текущего состояния"""
