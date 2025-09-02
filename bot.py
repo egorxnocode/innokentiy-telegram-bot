@@ -821,10 +821,14 @@ class TelegramBot:
             user = update.effective_user
             telegram_id = user.id
             
+            logger.info(f"🔧 Команда /menu вызвана пользователем {telegram_id}")
+            
             # Проверяем, что пользователь зарегистрирован
             current_user = await retry_helper.retry_async_operation(
                 lambda: db.get_user_by_telegram_id(telegram_id)
             )
+            
+            logger.info(f"🔧 Пользователь в базе: {current_user is not None}, состояние: {current_user.get('state') if current_user else 'None'}")
             
             if not current_user:
                 await update.message.reply_text(
