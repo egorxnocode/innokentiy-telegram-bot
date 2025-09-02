@@ -403,16 +403,27 @@ class TelegramBot:
                 parse_mode='HTML'
             )
     
+    async def _safe_answer_callback_query(self, query):
+        """Безопасно отвечает на callback query, игнорируя ошибки timeout"""
+        try:
+            await query.answer()
+        except Exception as e:
+            # Игнорируем ошибки callback query (timeout, duplicate, etc.)
+            logger.debug(f"Callback query answer failed (это нормально): {e}")
+    
     async def handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик callback query от inline кнопок"""
         try:
             query = update.callback_query
+            
+            # Сразу отвечаем на callback query, чтобы избежать timeout
+            await self._safe_answer_callback_query(query)
+            
             user = query.from_user
             telegram_id = user.id
             data = query.data
             
             if data == 'niche_correct':
-                await query.answer()
                 # Пользователь подтвердил нишу
                 temp_niche = context.user_data.get('temp_niche')
                 
@@ -466,7 +477,6 @@ class TelegramBot:
                     )
                 
             elif data == 'niche_retry':
-                await query.answer()
                 # Пользователь хочет попробовать еще раз
                 await query.edit_message_text(
                     messages.NICHE_RETRY,
@@ -477,7 +487,6 @@ class TelegramBot:
                 context.user_data.pop('temp_niche', None)
             
             elif data == 'change_niche':
-                await query.answer()
                 # Пользователь хочет изменить нишу
                 await retry_helper.retry_async_operation(
                     lambda: db.update_user_state(telegram_id, BotStates.WAITING_NICHE_DESCRIPTION)
@@ -489,38 +498,49 @@ class TelegramBot:
                 )
             
             elif data == 'suggest_topic':
-                await query.answer()
                 # Пользователь запросил предложение темы
                 await self.handle_suggest_topic(query, context)
             
             elif data == 'write_post':
-                await query.answer()
                 # Пользователь хочет написать пост
                 await self.handle_write_post_request(query, context)
             
             elif data == 'regenerate_post':
-                await query.answer()
                 # Пользователь хочет пересоздать пост
                 await self.handle_regenerate_post(query, context)
             
             elif data.startswith('goal_'):
-                await query.answer()
                 # Пользователь выбрал цель поста
                 await self.handle_goal_selection(query, context, data)
             
 # Удален обработчик new_topic - функция больше не нужна
         
         except Exception as e:
+            error_message = str(e).lower()
+            
             # Проверяем, не является ли ошибка "message is not modified"
-            if "message is not modified" in str(e).lower():
+            if "message is not modified" in error_message:
                 logger.debug(f"Сообщение уже в нужном состоянии: {e}")
                 return
             
+            # Проверяем timeout ошибки callback query
+            if any(phrase in error_message for phrase in [
+                "query is too old", 
+                "response timeout expired", 
+                "query id is invalid"
+            ]):
+                logger.debug(f"Callback query timeout (игнорируем): {e}")
+                return
+            
             logger.error(f"Ошибка в handle_callback_query: {e}")
-            await query.message.reply_text(
-                messages.ERROR_GENERAL,
-                parse_mode='HTML'
-            )
+            try:
+                await query.message.reply_text(
+                    messages.ERROR_GENERAL,
+                    parse_mode='HTML'
+                )
+            except Exception:
+                # Если даже отправка ошибки не удалась, просто логируем
+                logger.error(f"Не удалось отправить сообщение об ошибке: {e}")
     
     async def profile_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать профиль пользователя"""
