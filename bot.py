@@ -869,11 +869,20 @@ class TelegramBot:
                 logger.warning(f"Пользователь {target_user_id} не найден")
                 return False
             
-            # Проверяем состояние пользователя
+            # Проверяем состояние пользователя - исключаем только незавершенную регистрацию
             user_state = user.get('state', '')
-            if user_state != BotStates.REGISTERED:
+            incomplete_states = [
+                BotStates.WAITING_EMAIL, 
+                BotStates.EMAIL_VERIFIED, 
+                BotStates.WAITING_NICHE_DESCRIPTION, 
+                BotStates.WAITING_NICHE_CONFIRMATION
+            ]
+            
+            if user_state in incomplete_states:
                 logger.warning(f"Пользователь {target_user_id} не завершил регистрацию (состояние: {user_state})")
                 return False
+            
+            logger.info(f"Пользователь {target_user_id} прошел проверку состояния (состояние: {user_state})")
             
             # Получаем данные для напоминания
             if specific_day:
