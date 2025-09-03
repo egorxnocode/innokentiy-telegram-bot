@@ -54,6 +54,32 @@ class TelegramBot:
         self.app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         self.setup_handlers()
     
+    @staticmethod
+    def truncate_message_if_needed(text: str, max_length: int = 4000) -> str:
+        """
+        Обрезает сообщение, если оно превышает максимальную длину
+        
+        Args:
+            text (str): Исходный текст
+            max_length (int): Максимальная длина (по умолчанию 4000 для запаса)
+            
+        Returns:
+            str: Обрезанный текст с пометкой об обрезке
+        """
+        if len(text) <= max_length:
+            return text
+            
+        # Ищем последний перевод строки перед лимитом
+        truncated = text[:max_length - 100]  # Оставляем место для сообщения об обрезке
+        last_newline = truncated.rfind('\n')
+        
+        if last_newline > max_length - 500:  # Если есть разумное место для обрезки
+            truncated = text[:last_newline]
+        else:
+            truncated = text[:max_length - 100]
+            
+        return truncated + "\n\n⚠️ <i>Пост был обрезан из-за ограничений Telegram. Полный текст доступен в истории ваших постов.</i>"
+    
     def setup_handlers(self):
         """Настройка обработчиков команд и сообщений"""
         
@@ -1183,11 +1209,25 @@ class TelegramBot:
                     [InlineKeyboardButton(messages.BUTTON_REGENERATE, callback_data='regenerate_post')]
                 ])
                 
-                await processing_message.edit_text(
-                    response_text,
-                    parse_mode='HTML',
-                    reply_markup=keyboard
-                )
+                try:
+                    await processing_message.edit_text(
+                        response_text,
+                        parse_mode='HTML',
+                        reply_markup=keyboard
+                    )
+                except Exception as e:
+                    # Если сообщение слишком длинное, обрезаем его
+                    if "message is too long" in str(e).lower() or "Message_too_long" in str(e):
+                        logger.warning(f"Пост слишком длинный для пользователя {telegram_id}, обрезаем")
+                        truncated_text = self.truncate_message_if_needed(response_text)
+                        await processing_message.edit_text(
+                            truncated_text,
+                            parse_mode='HTML',
+                            reply_markup=keyboard
+                        )
+                    else:
+                        # Другая ошибка - перебрасываем
+                        raise e
             else:
                 # Ошибка генерации или таймаут
                 # Возвращаем состояние для повторного ответа
@@ -1248,10 +1288,23 @@ class TelegramBot:
                 remaining_attempts=remaining_attempts
             )
             
-            await query.edit_message_text(
-                question_text,
-                parse_mode='HTML'
-            )
+            try:
+                await query.edit_message_text(
+                    question_text,
+                    parse_mode='HTML'
+                )
+            except Exception as e:
+                # Если сообщение слишком длинное, обрезаем его
+                if "message is too long" in str(e).lower() or "Message_too_long" in str(e):
+                    logger.warning(f"Вопрос слишком длинный для пользователя {telegram_id}, обрезаем")
+                    truncated_text = self.truncate_message_if_needed(question_text)
+                    await query.edit_message_text(
+                        truncated_text,
+                        parse_mode='HTML'
+                    )
+                else:
+                    # Другая ошибка - перебрасываем
+                    raise e
         
         except Exception as e:
             # Проверяем, не является ли ошибка "message is not modified"
