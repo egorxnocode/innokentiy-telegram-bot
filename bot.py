@@ -303,8 +303,10 @@ class TelegramBot:
             help_text += """
 <b>🔧 Админские команды:</b>
 • /test_reminder - Отправить тестовое напоминание себе
-• /send_daily_reminders - Запустить ручную рассылку напоминаний всем пользователям
-• /send_daily_reminders 5 - Отправить напоминания конкретного дня (1-31) [ТЕСТИРОВАНИЕ]
+• /send_daily_reminders - Запустить рассылку всем пользователям
+• /send_daily_reminders 5 - Отправить всем напоминания 5-го дня
+• /send_daily_reminders 123456789 - Отправить конкретному пользователю
+• /send_daily_reminders 5 123456789 - Отправить 5-й день конкретному пользователю
 • /clear_test_day - Очистить тестовый день (вернуться к текущему дню)
 """
         
@@ -847,12 +849,92 @@ class TelegramBot:
                 parse_mode='HTML'
             )
     
+    async def _send_reminder_to_user(self, target_user_id: int, specific_day: int = None) -> bool:
+        """Отправляет напоминание конкретному пользователю
+        
+        Args:
+            target_user_id (int): Telegram ID пользователя
+            specific_day (int, optional): Номер дня для отправки
+            
+        Returns:
+            bool: True если напоминание отправлено успешно
+        """
+        try:
+            # Проверяем, существует ли пользователь и завершил ли он регистрацию
+            user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(target_user_id)
+            )
+            
+            if not user:
+                logger.warning(f"Пользователь {target_user_id} не найден")
+                return False
+            
+            # Проверяем состояние пользователя
+            user_state = user.get('state', '')
+            if user_state != BotStates.REGISTERED:
+                logger.warning(f"Пользователь {target_user_id} не завершил регистрацию (состояние: {user_state})")
+                return False
+            
+            # Получаем данные для напоминания
+            if specific_day:
+                day_of_month = specific_day
+            else:
+                from datetime import datetime
+                day_of_month = datetime.now().day
+            
+            # Для дней больше 31 берем последний день
+            if day_of_month > 31:
+                day_of_month = 31
+            elif day_of_month < 1:
+                day_of_month = 1
+            
+            daily_content = await retry_helper.retry_async_operation(
+                lambda: db.get_daily_content(day_of_month)
+            )
+            
+            if daily_content:
+                reminder_template = daily_content.get('message', messages.DAILY_REMINDER)
+            else:
+                reminder_template = messages.DAILY_REMINDER
+            
+            # Форматируем сообщение
+            niche = user.get('niche', 'вашей сфере')
+            reminder_text = reminder_template.format(
+                niche=text_formatter.escape_html(niche)
+            )
+            
+            # Создаем кнопки
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(messages.BUTTON_SUGGEST_TOPIC, callback_data='suggest_topic')]
+            ])
+            
+            # Отправляем напоминание
+            from telegram import Bot
+            bot = Bot(token=TELEGRAM_BOT_TOKEN)
+            
+            await bot.send_message(
+                chat_id=target_user_id,
+                text=reminder_text,
+                parse_mode='HTML',
+                reply_markup=keyboard
+            )
+            
+            logger.info(f"Напоминание успешно отправлено пользователю {target_user_id} (день {day_of_month})")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка при отправке напоминания пользователю {target_user_id}: {e}")
+            return False
+    
     async def send_daily_reminders_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Админская команда для ручной отправки ежедневных напоминаний всем пользователям
+        """Админская команда для ручной отправки ежедневных напоминаний
         
         Использование:
-        /send_daily_reminders - отправить напоминания текущего дня
-        /send_daily_reminders 5 - отправить напоминания 5-го дня
+        /send_daily_reminders - отправить всем напоминания текущего дня
+        /send_daily_reminders 5 - отправить всем напоминания 5-го дня
+        /send_daily_reminders 123456789 - отправить конкретному пользователю (по telegram_id)
+        /send_daily_reminders 5 123456789 - отправить 5-й день конкретному пользователю
         """
         try:
             user = update.effective_user
@@ -868,38 +950,99 @@ class TelegramBot:
             
             # Парсим аргументы команды
             specific_day = None
+            target_user_id = None
+            
             if context.args:
-                try:
-                    day_arg = int(context.args[0])
-                    if 1 <= day_arg <= 31:
-                        specific_day = day_arg
-                    else:
+                # Обрабатываем различные варианты аргументов
+                if len(context.args) == 1:
+                    try:
+                        arg = int(context.args[0])
+                        if 1 <= arg <= 31:
+                            # Это день
+                            specific_day = arg
+                        elif arg > 100000:  # Telegram ID обычно больше 100k
+                            # Это telegram_id пользователя
+                            target_user_id = arg
+                        else:
+                            await update.message.reply_text(
+                                "❌ Неверный аргумент. Должен быть день (1-31) или telegram_id.\n\n"
+                                "<b>Использование:</b>\n"
+                                "• <code>/send_daily_reminders</code> - всем, текущий день\n"
+                                "• <code>/send_daily_reminders 5</code> - всем, 5-й день\n"
+                                "• <code>/send_daily_reminders 123456789</code> - пользователю, текущий день\n"
+                                "• <code>/send_daily_reminders 5 123456789</code> - пользователю, 5-й день",
+                                parse_mode='HTML'
+                            )
+                            return
+                    except ValueError:
                         await update.message.reply_text(
-                            "❌ Номер дня должен быть от 1 до 31.\n\n"
+                            "❌ Неверный формат аргумента.\n\n"
                             "<b>Использование:</b>\n"
-                            "• <code>/send_daily_reminders</code> - текущий день\n"
-                            "• <code>/send_daily_reminders 5</code> - 5-й день",
+                            "• <code>/send_daily_reminders</code> - всем, текущий день\n"
+                            "• <code>/send_daily_reminders 5</code> - всем, 5-й день\n"
+                            "• <code>/send_daily_reminders 123456789</code> - пользователю, текущий день\n"
+                            "• <code>/send_daily_reminders 5 123456789</code> - пользователю, 5-й день",
                             parse_mode='HTML'
                         )
                         return
-                except ValueError:
+                        
+                elif len(context.args) == 2:
+                    try:
+                        day_arg = int(context.args[0])
+                        user_arg = int(context.args[1])
+                        
+                        if not (1 <= day_arg <= 31):
+                            await update.message.reply_text(
+                                "❌ Номер дня должен быть от 1 до 31.\n\n"
+                                "<b>Использование:</b> <code>/send_daily_reminders 5 123456789</code>",
+                                parse_mode='HTML'
+                            )
+                            return
+                            
+                        if user_arg < 100000:
+                            await update.message.reply_text(
+                                "❌ Telegram ID должен быть больше 100000.\n\n"
+                                "<b>Использование:</b> <code>/send_daily_reminders 5 123456789</code>",
+                                parse_mode='HTML'
+                            )
+                            return
+                            
+                        specific_day = day_arg
+                        target_user_id = user_arg
+                        
+                    except ValueError:
+                        await update.message.reply_text(
+                            "❌ Неверный формат аргументов.\n\n"
+                            "<b>Использование:</b> <code>/send_daily_reminders [день] [telegram_id]</code>",
+                            parse_mode='HTML'
+                        )
+                        return
+                else:
                     await update.message.reply_text(
-                        "❌ Неверный формат номера дня.\n\n"
+                        "❌ Слишком много аргументов.\n\n"
                         "<b>Использование:</b>\n"
-                        "• <code>/send_daily_reminders</code> - текущий день\n"
-                        "• <code>/send_daily_reminders 5</code> - 5-й день",
+                        "• <code>/send_daily_reminders</code> - всем, текущий день\n"
+                        "• <code>/send_daily_reminders 5</code> - всем, 5-й день\n"
+                        "• <code>/send_daily_reminders 123456789</code> - пользователю, текущий день\n"
+                        "• <code>/send_daily_reminders 5 123456789</code> - пользователю, 5-й день",
                         parse_mode='HTML'
                     )
                     return
             
             # Формируем сообщение о начале процесса
-            if specific_day:
-                status_text = f"🔄 <b>Запускаю рассылку напоминаний для дня {specific_day}...</b>\n\n"
+            if target_user_id:
+                if specific_day:
+                    status_text = f"🔄 <b>Отправляю напоминание дня {specific_day} пользователю {target_user_id}...</b>\n\n"
+                else:
+                    status_text = f"🔄 <b>Отправляю напоминание пользователю {target_user_id}...</b>\n\n"
             else:
-                status_text = "🔄 <b>Запускаю ручную рассылку ежедневных напоминаний...</b>\n\n"
+                if specific_day:
+                    status_text = f"🔄 <b>Запускаю рассылку напоминаний для дня {specific_day}...</b>\n\n"
+                else:
+                    status_text = "🔄 <b>Запускаю ручную рассылку ежедневных напоминаний...</b>\n\n"
             
             status_message = await update.message.reply_text(
-                status_text + "Это может занять некоторое время.",
+                status_text + ("Проверяю пользователя..." if target_user_id else "Это может занять некоторое время."),
                 parse_mode='HTML'
             )
             
@@ -909,22 +1052,39 @@ class TelegramBot:
                     lambda: db.set_active_reminder_day(specific_day)
                 )
             
-            # Импортируем планировщик для использования его логики
-            from scheduler import scheduler
-            
-            # Запускаем рассылку с помощью существующего метода планировщика
-            await scheduler.send_daily_reminders(specific_day=specific_day)
-            
-            # Отправляем сообщение об успешном завершении
-            if specific_day:
-                success_text = f"✅ <b>Рассылка напоминаний для дня {specific_day} завершена!</b>\n\n"
+            if target_user_id:
+                # Отправка конкретному пользователю
+                success = await self._send_reminder_to_user(target_user_id, specific_day)
+                
+                if success:
+                    if specific_day:
+                        success_text = f"✅ <b>Напоминание дня {specific_day} отправлено пользователю {target_user_id}!</b>"
+                    else:
+                        success_text = f"✅ <b>Напоминание отправлено пользователю {target_user_id}!</b>"
+                else:
+                    if specific_day:
+                        success_text = f"❌ <b>Не удалось отправить напоминание дня {specific_day} пользователю {target_user_id}</b>\n\n<i>Возможно, пользователь не найден или не завершил регистрацию.</i>"
+                    else:
+                        success_text = f"❌ <b>Не удалось отправить напоминание пользователю {target_user_id}</b>\n\n<i>Возможно, пользователь не найден или не завершил регистрацию.</i>"
+                
+                await status_message.edit_text(success_text, parse_mode='HTML')
             else:
-                success_text = "✅ <b>Ручная рассылка ежедневных напоминаний завершена!</b>\n\n"
-            
-            await status_message.edit_text(
-                success_text + "Все пользователи с завершенной регистрацией получили напоминания.",
-                parse_mode='HTML'
-            )
+                # Рассылка всем пользователям
+                from scheduler import scheduler
+                
+                # Запускаем рассылку с помощью существующего метода планировщика
+                await scheduler.send_daily_reminders(specific_day=specific_day)
+                
+                # Отправляем сообщение об успешном завершении
+                if specific_day:
+                    success_text = f"✅ <b>Рассылка напоминаний для дня {specific_day} завершена!</b>\n\n"
+                else:
+                    success_text = "✅ <b>Ручная рассылка ежедневных напоминаний завершена!</b>\n\n"
+                
+                await status_message.edit_text(
+                    success_text + "Все пользователи с завершенной регистрацией получили напоминания.",
+                    parse_mode='HTML'
+                )
             
             logger.info(f"Админ {telegram_id} запустил рассылку напоминаний" + 
                        (f" для дня {specific_day}" if specific_day else ""))
