@@ -54,6 +54,143 @@ class TelegramBot:
         self.app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         self.setup_handlers()
     
+    @staticmethod
+    def get_previous_state(current_state: str) -> str:
+        """
+        Возвращает предыдущее состояние для восстановления после ошибки
+        
+        Args:
+            current_state (str): Текущее состояние пользователя
+            
+        Returns:
+            str: Предыдущее состояние или текущее, если это начальное состояние
+        """
+        state_flow = {
+            BotStates.EMAIL_VERIFIED: BotStates.WAITING_EMAIL,
+            BotStates.WAITING_NICHE_DESCRIPTION: BotStates.EMAIL_VERIFIED,
+            BotStates.WAITING_NICHE_CONFIRMATION: BotStates.WAITING_NICHE_DESCRIPTION,
+            BotStates.REGISTERED: BotStates.WAITING_NICHE_CONFIRMATION,
+            BotStates.WAITING_POST_GOAL: BotStates.REGISTERED,
+            BotStates.WAITING_POST_ANSWER: BotStates.WAITING_POST_GOAL,
+            BotStates.POST_GENERATED: BotStates.WAITING_POST_ANSWER
+        }
+        
+        return state_flow.get(current_state, current_state)
+    
+    async def rollback_to_previous_state(self, telegram_id: int, current_state: str, update: Update, context: ContextTypes.DEFAULT_TYPE, error_message: str = None):
+        """
+        Возвращает пользователя к предыдущему состоянию после ошибки
+        
+        Args:
+            telegram_id (int): ID пользователя
+            current_state (str): Текущее состояние
+            update (Update): Объект обновления
+            context (ContextTypes.DEFAULT_TYPE): Контекст
+            error_message (str): Дополнительное сообщение об ошибке
+        """
+        try:
+            previous_state = self.get_previous_state(current_state)
+            
+            # Если состояние не изменилось (начальное), просто показываем меню
+            if previous_state == current_state:
+                if current_state == BotStates.WAITING_EMAIL:
+                    await update.effective_message.reply_text(
+                        "🔄 Попробуйте еще раз.\n\n" + messages.WELCOME_MESSAGE,
+                        parse_mode='HTML'
+                    )
+                else:
+                    await self.show_main_menu(update, context)
+                return
+            
+            # Обновляем состояние в базе данных
+            await retry_helper.retry_async_operation(
+                lambda: db.update_user_state(telegram_id, previous_state)
+            )
+            
+            # Формируем сообщение о возврате
+            recovery_message = "🔄 Произошла ошибка. Возвращаемся к предыдущему шагу.\n\n"
+            if error_message:
+                recovery_message += f"<i>Причина: {error_message}</i>\n\n"
+            
+            # Направляем пользователя в соответствии с предыдущим состоянием
+            if previous_state == BotStates.WAITING_EMAIL:
+                await update.effective_message.reply_text(
+                    recovery_message + messages.WELCOME_MESSAGE,
+                    parse_mode='HTML'
+                )
+            elif previous_state == BotStates.EMAIL_VERIFIED:
+                # Переходим к запросу ниши
+                await update.effective_message.reply_text(
+                    recovery_message + messages.NICHE_REQUEST,
+                    parse_mode='HTML'
+                )
+            elif previous_state == BotStates.WAITING_NICHE_DESCRIPTION:
+                await update.effective_message.reply_text(
+                    recovery_message + messages.NICHE_RETRY,
+                    parse_mode='HTML'
+                )
+            elif previous_state == BotStates.WAITING_NICHE_CONFIRMATION:
+                # Нужно повторно определить нишу - возвращаемся к описанию
+                await retry_helper.retry_async_operation(
+                    lambda: db.update_user_state(telegram_id, BotStates.WAITING_NICHE_DESCRIPTION)
+                )
+                await update.effective_message.reply_text(
+                    recovery_message + messages.NICHE_RETRY,
+                    parse_mode='HTML'
+                )
+            elif previous_state == BotStates.REGISTERED:
+                await self.show_main_menu(update, context)
+                await update.effective_message.reply_text(
+                    recovery_message + "Воспользуйтесь кнопками меню ниже.",
+                    parse_mode='HTML',
+                    reply_markup=ReplyKeyboardMarkup(MAIN_MENU_KEYBOARD, resize_keyboard=True)
+                )
+            elif previous_state == BotStates.WAITING_POST_GOAL:
+                # Возвращаемся к выбору темы
+                await self.show_main_menu(update, context)
+                await update.effective_message.reply_text(
+                    recovery_message + "Попробуйте запросить тему для поста еще раз.",
+                    parse_mode='HTML',
+                    reply_markup=ReplyKeyboardMarkup(MAIN_MENU_KEYBOARD, resize_keyboard=True)
+                )
+            elif previous_state == BotStates.WAITING_POST_ANSWER:
+                # Нужно вернуть данные контента и состояние
+                content_data = context.user_data.get('current_content')
+                if content_data:
+                    # Возвращаемся к выбору цели поста
+                    await retry_helper.retry_async_operation(
+                        lambda: db.update_user_state(telegram_id, BotStates.WAITING_POST_GOAL)
+                    )
+                    
+                    await update.effective_message.reply_text(
+                        recovery_message + messages.POST_GOAL_SELECTION.format(
+                            topic=text_formatter.escape_html(content_data.get('adapted_topic', content_data.get('topic', 'Неизвестная тема')))
+                        ),
+                        parse_mode='HTML',
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("💥 Реакции", callback_data='goal_reactions')],
+                            [InlineKeyboardButton("💰 Продажи", callback_data='goal_sales')],
+                            [InlineKeyboardButton("🔗 Трафик", callback_data='goal_traffic')],
+                            [InlineKeyboardButton("📈 Экспертность", callback_data='goal_expertise')]
+                        ])
+                    )
+                else:
+                    # Нет данных контента - возвращаемся в главное меню
+                    await self.show_main_menu(update, context)
+                    await update.effective_message.reply_text(
+                        recovery_message + "Попробуйте запросить тему для поста еще раз.",
+                        parse_mode='HTML',
+                        reply_markup=ReplyKeyboardMarkup(MAIN_MENU_KEYBOARD, resize_keyboard=True)
+                    )
+            else:
+                # Неизвестное состояние - в главное меню
+                await self.show_main_menu(update, context)
+                
+        except Exception as e:
+            logger.error(f"Ошибка при возврате к предыдущему состоянию: {e}")
+            # В крайнем случае показываем главное меню
+            await self.show_main_menu(update, context)
+    
     def setup_handlers(self):
         """Настройка обработчиков команд и сообщений"""
         
@@ -307,10 +444,12 @@ class TelegramBot:
         
         except Exception as e:
             logger.error(f"Ошибка в handle_email_input: {e}")
-            await update.message.reply_text(
-                messages.ERROR_DATABASE,
-                parse_mode='HTML'
+            # Возвращаемся к предыдущему состоянию
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
             )
+            current_state = current_user.get('state', BotStates.WAITING_EMAIL) if current_user else BotStates.WAITING_EMAIL
+            await self.rollback_to_previous_state(telegram_id, current_state, update, context, "Ошибка при проверке email")
     
     async def handle_niche_description(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
         """Обработка описания ниши"""
@@ -357,10 +496,14 @@ class TelegramBot:
         
         except Exception as e:
             logger.error(f"Ошибка в handle_niche_description: {e}")
-            await update.message.reply_text(
-                messages.ERROR_N8N_WEBHOOK,
-                parse_mode='HTML'
+            # Возвращаемся к предыдущему состоянию
+            user = update.effective_user
+            telegram_id = user.id
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
             )
+            current_state = current_user.get('state', BotStates.WAITING_NICHE_DESCRIPTION) if current_user else BotStates.WAITING_NICHE_DESCRIPTION
+            await self.rollback_to_previous_state(telegram_id, current_state, update, context, "Ошибка при определении ниши")
     
     async def handle_voice_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик голосовых сообщений"""
@@ -412,10 +555,14 @@ class TelegramBot:
         
         except Exception as e:
             logger.error(f"Ошибка в handle_voice_message: {e}")
-            await update.message.reply_text(
-                messages.ERROR_VOICE_TRANSCRIPTION,
-                parse_mode='HTML'
+            # Возвращаемся к предыдущему состоянию
+            user = update.effective_user
+            telegram_id = user.id
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
             )
+            current_state = current_user.get('state', BotStates.REGISTERED) if current_user else BotStates.REGISTERED
+            await self.rollback_to_previous_state(telegram_id, current_state, update, context, "Ошибка при обработке голосового сообщения")
     
     async def _safe_answer_callback_query(self, query):
         """Безопасно отвечает на callback query, игнорируя ошибки timeout"""
@@ -548,13 +695,32 @@ class TelegramBot:
             
             logger.error(f"Ошибка в handle_callback_query: {e}")
             try:
-                await query.message.reply_text(
-                    messages.ERROR_GENERAL,
-                    parse_mode='HTML'
+                # Пытаемся вернуться к предыдущему состоянию
+                user = query.from_user
+                telegram_id = user.id
+                current_user = await retry_helper.retry_async_operation(
+                    lambda: db.get_user_by_telegram_id(telegram_id)
                 )
+                current_state = current_user.get('state', BotStates.REGISTERED) if current_user else BotStates.REGISTERED
+                
+                # Создаем фиктивный update для rollback
+                fake_update = Update(
+                    update_id=query.id,
+                    effective_message=query.message,
+                    effective_user=user,
+                    effective_chat=query.message.chat
+                )
+                await self.rollback_to_previous_state(telegram_id, current_state, fake_update, context, "Ошибка при обработке действия")
             except Exception:
                 # Если даже отправка ошибки не удалась, просто логируем
-                logger.error(f"Не удалось отправить сообщение об ошибке: {e}")
+                logger.error(f"Не удалось выполнить rollback после ошибки callback: {e}")
+                try:
+                    await query.message.reply_text(
+                        messages.ERROR_GENERAL,
+                        parse_mode='HTML'
+                    )
+                except Exception:
+                    logger.error(f"Критическая ошибка: не удалось отправить даже сообщение об ошибке")
     
     async def profile_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать профиль пользователя"""
@@ -1210,10 +1376,14 @@ class TelegramBot:
         
         except Exception as e:
             logger.error(f"Ошибка в handle_post_answer: {e}")
-            await update.message.reply_text(
-                messages.ERROR_POST_GENERATION,
-                parse_mode='HTML'
+            # Возвращаемся к предыдущему состоянию
+            user = update.effective_user
+            telegram_id = user.id
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
             )
+            current_state = current_user.get('state', BotStates.WAITING_POST_ANSWER) if current_user else BotStates.WAITING_POST_ANSWER
+            await self.rollback_to_previous_state(telegram_id, current_state, update, context, "Ошибка при генерации поста")
     
     async def handle_regenerate_post(self, query, context: ContextTypes.DEFAULT_TYPE):
         """Обработка запроса на повторную генерацию поста"""
