@@ -614,10 +614,18 @@ class TelegramBot:
                     
                     await asyncio.sleep(1)
                     
-                    # Показываем информацию о напоминаниях
+                    # Показываем информацию о напоминаниях с инлайн кнопками
+                    welcome_keyboard = InlineKeyboardMarkup([
+                        [
+                            InlineKeyboardButton("👤 Профиль", callback_data='show_profile'),
+                            InlineKeyboardButton("📅 Тема дня", callback_data='daily_topic')
+                        ]
+                    ])
+                    
                     await query.message.reply_text(
                         messages.REMINDER_SETUP,
-                        parse_mode='HTML'
+                        parse_mode='HTML',
+                        reply_markup=welcome_keyboard
                     )
                     
                     await asyncio.sleep(1)
@@ -675,6 +683,14 @@ class TelegramBot:
             elif data.startswith('goal_'):
                 # Пользователь выбрал цель поста
                 await self.handle_goal_selection(query, context, data)
+            
+            elif data == 'show_profile':
+                # Показать профиль пользователя
+                await self.handle_show_profile_inline(query, context)
+            
+            elif data == 'daily_topic':
+                # Показать тему дня
+                await self.handle_daily_topic_inline(query, context)
             
 # Удален обработчик new_topic - функция больше не нужна
         
@@ -1599,6 +1615,115 @@ class TelegramBot:
                 return
             
             logger.error(f"Ошибка в handle_regenerate_post: {e}")
+            await query.edit_message_text(
+                messages.ERROR_GENERAL,
+                parse_mode='HTML'
+            )
+    
+    async def handle_show_profile_inline(self, query, context):
+        """Обработчик inline кнопки 'Профиль'"""
+        try:
+            user = query.from_user
+            telegram_id = user.id
+            
+            # Получаем данные пользователя
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
+            )
+            
+            if not current_user:
+                await query.edit_message_text(
+                    "Пользователь не найден. Используйте /start для регистрации.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Получаем информацию о лимитах постов
+            limit_info = await retry_helper.retry_async_operation(
+                lambda: db.check_user_post_limit(telegram_id)
+            )
+            
+            # Форматируем дату регистрации
+            reg_date = current_user.get('registration_date', 'Неизвестно')
+            if reg_date and reg_date != 'Неизвестно':
+                try:
+                    parsed_date = datetime.fromisoformat(reg_date.replace('Z', '+00:00'))
+                    reg_date = parsed_date.strftime('%d.%m.%Y')
+                except:
+                    reg_date = 'Неизвестно'
+            
+            # Создаем кнопки профиля
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(messages.BUTTON_CHANGE_NICHE, callback_data='change_niche')]
+            ])
+            
+            # Отправляем информацию о профиле
+            profile_text = messages.PROFILE_INFO.format(
+                email=text_formatter.escape_html(current_user.get('email', 'Не указан')),
+                niche=text_formatter.escape_html(current_user.get('niche', 'Не определена')),
+                registration_date=reg_date,
+                posts_generated=limit_info.get('posts_generated', 0),
+                posts_limit=limit_info.get('posts_limit', 10),
+                remaining_posts=limit_info.get('remaining_posts', 10)
+            )
+            
+            await query.edit_message_text(
+                profile_text,
+                parse_mode='HTML',
+                reply_markup=keyboard
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка при показе профиля через inline кнопку: {e}")
+            await query.edit_message_text(
+                messages.ERROR_GENERAL,
+                parse_mode='HTML'
+            )
+    
+    async def handle_daily_topic_inline(self, query, context):
+        """Обработчик inline кнопки 'Тема дня'"""
+        try:
+            user = query.from_user
+            telegram_id = user.id
+            
+            # Получаем данные пользователя для ниши
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
+            )
+            
+            if not current_user:
+                await query.edit_message_text(
+                    "Пользователь не найден. Используйте /start для регистрации.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Получаем тему дня
+            from datetime import datetime
+            day_of_month = datetime.now().day
+            
+            daily_content = await retry_helper.retry_async_operation(
+                lambda: db.get_daily_content(day_of_month)
+            )
+            
+            if daily_content and daily_content.get('reminder_message'):
+                reminder_text = daily_content['reminder_message']
+                logger.info(f"Используем сообщение для дня {day_of_month}")
+            else:
+                logger.info(f"Контент для дня {day_of_month} не найден, используем стандартный")
+                reminder_text = messages.DAILY_REMINDER
+            
+            # Форматируем сообщение с нишей пользователя
+            niche = current_user.get('niche', 'вашей ниши')
+            formatted_message = reminder_text.format(niche=text_formatter.escape_html(niche))
+            
+            await query.edit_message_text(
+                formatted_message,
+                parse_mode='HTML'
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка при показе темы дня через inline кнопку: {e}")
             await query.edit_message_text(
                 messages.ERROR_GENERAL,
                 parse_mode='HTML'
