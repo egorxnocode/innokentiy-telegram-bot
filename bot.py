@@ -256,12 +256,20 @@ class TelegramBot:
             )
             
             if existing_user:
-                # Пользователь уже зарегистрирован
-                if existing_user['state'] == BotStates.REGISTERED:
-                    await self.show_main_menu(update, context)
-                else:
+                # Проверяем, завершена ли регистрация
+                incomplete_states = [
+                    BotStates.WAITING_EMAIL, 
+                    BotStates.EMAIL_VERIFIED, 
+                    BotStates.WAITING_NICHE_DESCRIPTION, 
+                    BotStates.WAITING_NICHE_CONFIRMATION
+                ]
+                
+                if existing_user['state'] in incomplete_states:
                     # Продолжаем регистрацию с текущего состояния
                     await self.continue_registration(update, context, existing_user)
+                else:
+                    # Пользователь зарегистрирован - показываем главное меню
+                    await self.show_main_menu(update, context)
             else:
                 # Новый пользователь - начинаем регистрацию
                 await update.message.reply_text(
