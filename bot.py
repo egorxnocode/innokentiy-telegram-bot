@@ -1696,7 +1696,7 @@ class TelegramBot:
             )
     
     async def handle_daily_topic_inline(self, query, context):
-        """Обработчик inline кнопки 'Тема дня'"""
+        """Обработчик inline кнопки 'Тема дня' - дублирует рассылку в 9 утра"""
         try:
             user = query.from_user
             telegram_id = user.id
@@ -1713,7 +1713,7 @@ class TelegramBot:
                 )
                 return
             
-            # Получаем тему дня
+            # Получаем тему дня (точно как в scheduler.py)
             from datetime import datetime
             day_of_month = datetime.now().day
             
@@ -1722,19 +1722,30 @@ class TelegramBot:
             )
             
             if daily_content and daily_content.get('reminder_message'):
-                reminder_text = daily_content['reminder_message']
+                reminder_template = daily_content['reminder_message']
                 logger.info(f"Используем сообщение для дня {day_of_month}")
             else:
                 logger.info(f"Контент для дня {day_of_month} не найден, используем стандартный")
-                reminder_text = messages.DAILY_REMINDER
+                reminder_template = messages.DAILY_REMINDER
             
             # Форматируем сообщение с нишей пользователя
-            niche = current_user.get('niche', 'вашей ниши')
-            formatted_message = reminder_text.format(niche=text_formatter.escape_html(niche))
+            niche = current_user.get('niche', 'Ваша ниша')
+            reminder_text = reminder_template.format(
+                niche=text_formatter.escape_html(niche)
+            )
+            
+            # Создаем кнопку "Предложи мне тему" (точно как в scheduler.py)
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    messages.BUTTON_SUGGEST_TOPIC, 
+                    callback_data='suggest_topic'
+                )]
+            ])
             
             await query.edit_message_text(
-                formatted_message,
-                parse_mode='HTML'
+                reminder_text,
+                parse_mode='HTML',
+                reply_markup=keyboard
             )
             
         except Exception as e:
