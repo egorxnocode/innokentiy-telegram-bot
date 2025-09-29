@@ -614,18 +614,10 @@ class TelegramBot:
                     
                     await asyncio.sleep(1)
                     
-                    # Показываем информацию о напоминаниях с инлайн кнопками
-                    welcome_keyboard = InlineKeyboardMarkup([
-                        [
-                            InlineKeyboardButton("👤 Профиль", callback_data='show_profile'),
-                            InlineKeyboardButton("📅 Тема дня", callback_data='daily_topic')
-                        ]
-                    ])
-                    
+                    # Показываем информацию о напоминаниях
                     await query.message.reply_text(
                         messages.REMINDER_SETUP,
-                        parse_mode='HTML',
-                        reply_markup=welcome_keyboard
+                        parse_mode='HTML'
                     )
                     
                     await asyncio.sleep(1)
@@ -1168,11 +1160,26 @@ class TelegramBot:
             one_time_keyboard=False
         )
         
+        # Создаем инлайн кнопки для быстрого доступа
+        inline_keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("👤 Профиль", callback_data='show_profile'),
+                InlineKeyboardButton("📅 Тема дня", callback_data='daily_topic')
+            ]
+        ])
+        
         await update.message.reply_text(
             "Добро пожаловать! Используйте кнопки меню ниже.\n\n"
             "🔄 <i>Если кнопка «👤 Профиль» не отображается, используйте команду /menu для обновления меню.</i>",
             parse_mode='HTML',
             reply_markup=keyboard
+        )
+        
+        # Отправляем дополнительное сообщение с инлайн кнопками
+        await update.message.reply_text(
+            "🎯 <b>Быстрые действия:</b>",
+            parse_mode='HTML',
+            reply_markup=inline_keyboard
         )
     
     async def menu_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
