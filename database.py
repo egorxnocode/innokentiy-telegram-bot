@@ -91,6 +91,9 @@ class Database:
             Dict: Созданная запись пользователя
         """
         try:
+            # Устанавливаем дату окончания подписки на 01.02.2026
+            subscription_end = datetime(2026, 2, 1).isoformat()
+            
             user_data = {
                 'telegram_id': telegram_id,
                 'email': email.lower(),
@@ -99,7 +102,8 @@ class Database:
                 'last_name': last_name,
                 'registration_date': datetime.utcnow().isoformat(),
                 'state': 'waiting_niche_description',
-                'is_active': True
+                'is_active': True,
+                'subscription_end_date': subscription_end
             }
             
             response = self.supabase.table(USERS_TABLE).insert(user_data).execute()
