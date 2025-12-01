@@ -37,6 +37,7 @@ from error_handler import (
     BotErrorHandler
 )
 from post_system import post_system, N8NTimeoutError, N8NConnectionError
+from subscription_manager import SubscriptionManager
 import messages
 
 # Настройка логирования
@@ -46,12 +47,38 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def subscription_required(func):
+    """Декоратор для проверки активной подписки перед выполнением команды"""
+    async def wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            # Получаем telegram_id пользователя
+            telegram_id = update.effective_user.id
+            
+            # Проверяем доступ
+            access_info = await self.subscription_manager.check_user_access(telegram_id)
+            
+            if not access_info['has_access']:
+                # Отправляем сообщение о заблокированном доступе
+                await self.subscription_manager.send_access_denied_message(telegram_id)
+                return
+            
+            # Если доступ есть, выполняем оригинальную функцию
+            return await func(self, update, context)
+            
+        except Exception as e:
+            logger.error(f"Ошибка в декораторе subscription_required: {e}")
+            # В случае ошибки пропускаем проверку
+            return await func(self, update, context)
+    
+    return wrapper
+
 class TelegramBot:
     """Основной класс Telegram бота"""
     
     def __init__(self):
         """Инициализация бота"""
         self.app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+        self.subscription_manager = SubscriptionManager(self.app.bot, db)
         self.setup_handlers()
     
     @staticmethod
@@ -325,6 +352,7 @@ class TelegramBot:
         
         await update.message.reply_text(help_text, parse_mode='HTML')
     
+    @subscription_required
     async def handle_text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик текстовых сообщений"""
         try:
@@ -515,6 +543,7 @@ class TelegramBot:
             current_state = current_user.get('state', BotStates.WAITING_NICHE_DESCRIPTION) if current_user else BotStates.WAITING_NICHE_DESCRIPTION
             await self.rollback_to_previous_state(telegram_id, current_state, update, context, "Ошибка при определении ниши")
     
+    @subscription_required
     async def handle_voice_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик голосовых сообщений"""
         try:
@@ -582,6 +611,7 @@ class TelegramBot:
             # Игнорируем ошибки callback query (timeout, duplicate, etc.)
             logger.debug(f"Callback query answer failed (это нормально): {e}")
     
+    @subscription_required
     async def handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик callback query от inline кнопок"""
         try:
@@ -740,6 +770,7 @@ class TelegramBot:
                 except Exception:
                     logger.error(f"Критическая ошибка: не удалось отправить даже сообщение об ошибке")
     
+    @subscription_required
     async def profile_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать профиль пользователя"""
         try:

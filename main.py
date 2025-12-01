@@ -66,6 +66,10 @@ class BotManager:
         """Запуск планировщика в отдельной задаче"""
         try:
             logger.info("Запуск планировщика напоминаний...")
+            
+            # Инициализируем subscription_manager в планировщике
+            scheduler.set_subscription_manager(self.bot.subscription_manager)
+            
             self.scheduler_task = scheduler.start()
             if self.scheduler_task:
                 # Не ждем завершения - планировщик должен работать бесконечно

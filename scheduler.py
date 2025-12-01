@@ -31,6 +31,11 @@ class ReminderScheduler:
         self.bot = Bot(token=TELEGRAM_BOT_TOKEN)
         self.is_running = False
         self.timezone = pytz.timezone(TIMEZONE)
+        self.subscription_manager = None
+    
+    def set_subscription_manager(self, subscription_manager):
+        """Устанавливает менеджер подписок"""
+        self.subscription_manager = subscription_manager
     
     async def send_daily_reminders(self, specific_day: int = None):
         """Отправляет ежедневные напоминания всем активным пользователям
@@ -178,6 +183,12 @@ class ReminderScheduler:
                     logger.info(f"Понедельник 00:01! Обнуляем счетчики в {now.strftime('%H:%M')}")
                     await self.reset_weekly_counters()
                     await asyncio.sleep(60)  # Ждем минуту
+                    
+                    # Проверяем подписки в 8:00
+                    if current_time.hour == 8 and current_time.minute == 0:
+                        if self.subscription_manager:
+                            logger.info("Запуск проверки подписок в 8:00")
+                            await self.subscription_manager.run_daily_subscription_check()
                 else:
                     # Проверяем каждые 30 секунд
                     await asyncio.sleep(30)

@@ -471,5 +471,176 @@ class Database:
             logger.error(f"Ошибка при получении постов пользователя {telegram_id}: {e}")
             raise
 
+    async def get_users_with_expiring_subscriptions(self, days_before: int) -> list:
+        """
+        Получает пользователей, у которых подписка истекает через указанное количество дней
+        
+        Args:
+            days_before (int): За сколько дней до истечения искать
+            
+        Returns:
+            list: Список пользователей с истекающими подписками
+        """
+        try:
+            from datetime import datetime, timedelta
+            
+            # Вычисляем дату, за которую нужно проверить
+            target_date = (datetime.utcnow() + timedelta(days=days_before)).date()
+            
+            response = self.supabase.table(USERS_TABLE).select("*").eq("subscription_status", "active").gte("subscription_end_date", target_date.isoformat()).lt("subscription_end_date", (target_date + timedelta(days=1)).isoformat()).execute()
+            
+            if response.data:
+                logger.info(f"Найдено {len(response.data)} пользователей с подпиской, истекающей через {days_before} дней")
+                return response.data
+            else:
+                logger.info(f"Пользователей с подпиской, истекающей через {days_before} дней, не найдено")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Ошибка при получении пользователей с истекающими подписками: {e}")
+            raise
+
+    async def get_users_with_expired_subscriptions(self) -> list:
+        """
+        Получает пользователей с истекшими подписками
+        
+        Returns:
+            list: Список пользователей с истекшими подписками
+        """
+        try:
+            from datetime import datetime
+            
+            current_date = datetime.utcnow().date()
+            
+            response = self.supabase.table(USERS_TABLE).select("*").eq("subscription_status", "active").lt("subscription_end_date", current_date.isoformat()).execute()
+            
+            if response.data:
+                logger.info(f"Найдено {len(response.data)} пользователей с истекшими подписками")
+                return response.data
+            else:
+                logger.info("Пользователей с истекшими подписками не найдено")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Ошибка при получении пользователей с истекшими подписками: {e}")
+            raise
+
+    async def update_subscription_status(self, telegram_id: int, status: str) -> bool:
+        """
+        Обновляет статус подписки пользователя
+        
+        Args:
+            telegram_id (int): Telegram ID пользователя
+            status (str): Новый статус ('active' или 'inactive')
+            
+        Returns:
+            bool: True если успешно обновлено
+        """
+        try:
+            response = self.supabase.table(USERS_TABLE).update({
+                'subscription_status': status,
+                'updated_at': datetime.utcnow().isoformat()
+            }).eq('telegram_id', telegram_id).execute()
+            
+            if response.data:
+                logger.info(f"Статус подписки пользователя {telegram_id} обновлен на {status}")
+                return True
+            else:
+                logger.warning(f"Не удалось обновить статус подписки пользователя {telegram_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении статуса подписки пользователя {telegram_id}: {e}")
+            raise
+
+    async def check_user_subscription_status(self, telegram_id: int) -> Dict[str, Any]:
+        """
+        Проверяет статус подписки пользователя
+        
+        Args:
+            telegram_id (int): Telegram ID пользователя
+            
+        Returns:
+            Dict: Информация о статусе подписки
+        """
+        try:
+            user = await self.get_user_by_telegram_id(telegram_id)
+            if not user:
+                return {'is_active': False, 'reason': 'user_not_found'}
+            
+            subscription_status = user.get('subscription_status', 'inactive')
+            subscription_end_date = user.get('subscription_end_date')
+            
+            if subscription_status != 'active':
+                return {'is_active': False, 'reason': 'subscription_inactive', 'end_date': subscription_end_date}
+            
+            if subscription_end_date:
+                from datetime import datetime
+                try:
+                    end_date = datetime.fromisoformat(subscription_end_date.replace('Z', '+00:00')).date()
+                    current_date = datetime.utcnow().date()
+                    
+                    if current_date > end_date:
+                        # Подписка истекла, обновляем статус
+                        await self.update_subscription_status(telegram_id, 'inactive')
+                        return {'is_active': False, 'reason': 'subscription_expired', 'end_date': subscription_end_date}
+                    
+                    return {'is_active': True, 'end_date': subscription_end_date, 'days_left': (end_date - current_date).days}
+                except ValueError:
+                    logger.error(f"Неверный формат даты окончания подписки для пользователя {telegram_id}: {subscription_end_date}")
+                    return {'is_active': False, 'reason': 'invalid_date', 'end_date': subscription_end_date}
+            
+            return {'is_active': True, 'end_date': None}
+            
+        except Exception as e:
+            logger.error(f"Ошибка при проверке статуса подписки пользователя {telegram_id}: {e}")
+            raise
+
+    async def update_all_subscription_statuses(self) -> Dict[str, int]:
+        """
+        Обновляет статусы подписок всех пользователей на основе даты окончания
+        
+        Returns:
+            Dict: Статистика обновлений
+        """
+        try:
+            from datetime import datetime
+            
+            current_date = datetime.utcnow().date()
+            
+            # Получаем всех пользователей с активными подписками
+            response = self.supabase.table(USERS_TABLE).select("telegram_id, subscription_end_date").eq("subscription_status", "active").execute()
+            
+            stats = {'updated_to_inactive': 0, 'kept_active': 0, 'errors': 0}
+            
+            if response.data:
+                for user in response.data:
+                    try:
+                        telegram_id = user['telegram_id']
+                        subscription_end_date = user.get('subscription_end_date')
+                        
+                        if subscription_end_date:
+                            end_date = datetime.fromisoformat(subscription_end_date.replace('Z', '+00:00')).date()
+                            
+                            if current_date > end_date:
+                                # Подписка истекла
+                                await self.update_subscription_status(telegram_id, 'inactive')
+                                stats['updated_to_inactive'] += 1
+                            else:
+                                stats['kept_active'] += 1
+                        else:
+                            stats['kept_active'] += 1
+                            
+                    except Exception as e:
+                        logger.error(f"Ошибка при обновлении статуса пользователя {user.get('telegram_id')}: {e}")
+                        stats['errors'] += 1
+            
+            logger.info(f"Обновление статусов завершено: {stats}")
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Ошибка при массовом обновлении статусов подписок: {e}")
+            raise
+
 # Создаем глобальный экземпляр базы данных
 db = Database()
