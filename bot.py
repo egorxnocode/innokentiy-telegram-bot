@@ -54,6 +54,10 @@ def subscription_required(func):
             # Получаем telegram_id пользователя
             telegram_id = update.effective_user.id
             
+            # Пропускаем проверку для админа
+            if str(telegram_id) == ADMIN_CHAT_ID:
+                return await func(self, update, context)
+            
             # Проверяем доступ
             access_info = await self.subscription_manager.check_user_access(telegram_id)
             
