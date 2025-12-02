@@ -372,7 +372,6 @@ class TelegramBot:
         
         await update.message.reply_text(help_text, parse_mode='HTML')
     
-    @subscription_required
     async def handle_text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик текстовых сообщений"""
         try:
@@ -396,6 +395,20 @@ class TelegramBot:
             else:
                 # Обрабатываем в зависимости от состояния
                 state = current_user.get('state', BotStates.WAITING_EMAIL)
+                
+                # Проверяем подписку только для состояний после регистрации
+                registration_states = [
+                    BotStates.WAITING_EMAIL,
+                    BotStates.WAITING_NICHE_DESCRIPTION,
+                    BotStates.WAITING_NICHE_CONFIRMATION
+                ]
+                
+                # Если пользователь не админ и не в процессе регистрации - проверяем подписку
+                if str(telegram_id) != ADMIN_CHAT_ID and state not in registration_states:
+                    access_info = await self.subscription_manager.check_user_access(telegram_id)
+                    if not access_info['has_access']:
+                        await self.subscription_manager.send_access_denied_message(telegram_id)
+                        return
                 
                 if state == BotStates.WAITING_EMAIL:
                     await self.handle_email_input(update, context, text)
@@ -563,7 +576,6 @@ class TelegramBot:
             current_state = current_user.get('state', BotStates.WAITING_NICHE_DESCRIPTION) if current_user else BotStates.WAITING_NICHE_DESCRIPTION
             await self.rollback_to_previous_state(telegram_id, current_state, update, context, "Ошибка при определении ниши")
     
-    @subscription_required
     async def handle_voice_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик голосовых сообщений"""
         try:
@@ -583,6 +595,20 @@ class TelegramBot:
                     parse_mode='HTML'
                 )
                 return
+            
+            # Проверяем подписку только для состояний после регистрации
+            registration_states = [
+                BotStates.WAITING_EMAIL,
+                BotStates.WAITING_NICHE_DESCRIPTION,
+                BotStates.WAITING_NICHE_CONFIRMATION
+            ]
+            
+            # Если пользователь не админ и не в процессе регистрации - проверяем подписку
+            if str(telegram_id) != ADMIN_CHAT_ID and state not in registration_states:
+                access_info = await self.subscription_manager.check_user_access(telegram_id)
+                if not access_info['has_access']:
+                    await self.subscription_manager.send_access_denied_message(telegram_id)
+                    return
             
             # Показываем сообщение о процессе обработки
             processing_message = await update.message.reply_text(
