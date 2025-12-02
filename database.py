@@ -103,6 +103,7 @@ class Database:
                 'registration_date': datetime.utcnow().isoformat(),
                 'state': 'waiting_niche_description',
                 'is_active': True,
+                'subscription_status': 'active',
                 'subscription_end_date': subscription_end
             }
             

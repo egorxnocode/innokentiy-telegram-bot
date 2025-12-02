@@ -58,6 +58,22 @@ def subscription_required(func):
             if str(telegram_id) == ADMIN_CHAT_ID:
                 return await func(self, update, context)
             
+            # Проверяем состояние пользователя - пропускаем проверку во время регистрации
+            try:
+                user = await db.get_user_by_telegram_id(telegram_id)
+                if user:
+                    user_state = user.get('state', '')
+                    # Состояния регистрации - не проверяем подписку
+                    registration_states = [
+                        BotStates.WAITING_EMAIL,
+                        BotStates.WAITING_NICHE_DESCRIPTION,
+                        BotStates.WAITING_NICHE_CONFIRMATION
+                    ]
+                    if user_state in registration_states:
+                        return await func(self, update, context)
+            except Exception as e:
+                logger.error(f"Ошибка при проверке состояния пользователя: {e}")
+            
             # Проверяем доступ
             access_info = await self.subscription_manager.check_user_access(telegram_id)
             
