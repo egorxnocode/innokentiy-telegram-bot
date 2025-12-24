@@ -246,6 +246,7 @@ class TelegramBot:
         self.app.add_handler(CommandHandler("help", self.help_command))
         self.app.add_handler(CommandHandler("profile", self.profile_command))
         self.app.add_handler(CommandHandler("menu", self.menu_command))
+        self.app.add_handler(CommandHandler("theme", self.theme_command))
         self.app.add_handler(CommandHandler("test_reminder", self.test_reminder_command))
         self.app.add_handler(CommandHandler("send_daily_reminders", self.send_daily_reminders_command))
         self.app.add_handler(CommandHandler("clear_test_day", self.clear_test_day_command))
@@ -340,6 +341,7 @@ class TelegramBot:
 <b>Команды:</b>
 • /start - Начать работу или вернуться в главное меню
 • /profile - Показать профиль
+• /theme - Показать тему дня (сообщение из 9 утра)
 • /menu - Обновить меню (если кнопки не отображаются)
 • /help - Показать эту справку
 
@@ -1314,6 +1316,66 @@ class TelegramBot:
             logger.error(f"Ошибка в menu_command: {e}")
             await update.message.reply_text(
                 "❌ Произошла ошибка при обновлении меню.",
+                parse_mode='HTML'
+            )
+    
+    @subscription_required
+    async def theme_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показать тему дня - то же сообщение, что приходит в 9 утра"""
+        try:
+            user = update.effective_user
+            telegram_id = user.id
+            
+            # Получаем данные пользователя для ниши
+            current_user = await retry_helper.retry_async_operation(
+                lambda: db.get_user_by_telegram_id(telegram_id)
+            )
+            
+            if not current_user:
+                await update.message.reply_text(
+                    "Пользователь не найден. Используйте /start для регистрации.",
+                    parse_mode='HTML'
+                )
+                return
+            
+            # Получаем тему дня (точно как в scheduler.py)
+            day_of_month = datetime.now().day
+            
+            daily_content = await retry_helper.retry_async_operation(
+                lambda: db.get_daily_content(day_of_month)
+            )
+            
+            if daily_content and daily_content.get('reminder_message'):
+                reminder_template = daily_content['reminder_message']
+                logger.info(f"Используем сообщение для дня {day_of_month}")
+            else:
+                logger.info(f"Контент для дня {day_of_month} не найден, используем стандартный")
+                reminder_template = messages.DAILY_REMINDER
+            
+            # Форматируем сообщение с нишей пользователя
+            niche = current_user.get('niche', 'Ваша ниша')
+            reminder_text = reminder_template.format(
+                niche=text_formatter.escape_html(niche)
+            )
+            
+            # Создаем кнопку "Предложи мне тему" (точно как в scheduler.py)
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    messages.BUTTON_SUGGEST_TOPIC, 
+                    callback_data='suggest_topic'
+                )]
+            ])
+            
+            await update.message.reply_text(
+                reminder_text,
+                parse_mode='HTML',
+                reply_markup=keyboard
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка в theme_command: {e}")
+            await update.message.reply_text(
+                messages.ERROR_GENERAL,
                 parse_mode='HTML'
             )
 
