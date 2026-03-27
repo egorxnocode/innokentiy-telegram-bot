@@ -48,48 +48,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def subscription_required(func):
-    """Декоратор для проверки активной подписки перед выполнением команды"""
+    """Декоратор-заглушка: доступ открыт для всех зарегистрированных пользователей"""
     async def wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        try:
-            # Получаем telegram_id пользователя
-            telegram_id = update.effective_user.id
-            
-            # Пропускаем проверку для админа
-            if str(telegram_id) == ADMIN_CHAT_ID:
-                return await func(self, update, context)
-            
-            # Проверяем состояние пользователя - пропускаем проверку во время регистрации
-            try:
-                user = await db.get_user_by_telegram_id(telegram_id)
-                if user:
-                    user_state = user.get('state', '')
-                    # Состояния регистрации - не проверяем подписку
-                    registration_states = [
-                        BotStates.WAITING_EMAIL,
-                        BotStates.WAITING_NICHE_DESCRIPTION,
-                        BotStates.WAITING_NICHE_CONFIRMATION
-                    ]
-                    if user_state in registration_states:
-                        return await func(self, update, context)
-            except Exception as e:
-                logger.error(f"Ошибка при проверке состояния пользователя: {e}")
-            
-            # Проверяем доступ
-            access_info = await self.subscription_manager.check_user_access(telegram_id)
-            
-            if not access_info['has_access']:
-                # Отправляем сообщение о заблокированном доступе
-                await self.subscription_manager.send_access_denied_message(telegram_id)
-                return
-            
-            # Если доступ есть, выполняем оригинальную функцию
-            return await func(self, update, context)
-            
-        except Exception as e:
-            logger.error(f"Ошибка в декораторе subscription_required: {e}")
-            # В случае ошибки пропускаем проверку
-            return await func(self, update, context)
-    
+        return await func(self, update, context)
     return wrapper
 
 class TelegramBot:
@@ -398,20 +359,6 @@ class TelegramBot:
                 # Обрабатываем в зависимости от состояния
                 state = current_user.get('state', BotStates.WAITING_EMAIL)
                 
-                # Проверяем подписку только для состояний после регистрации
-                registration_states = [
-                    BotStates.WAITING_EMAIL,
-                    BotStates.WAITING_NICHE_DESCRIPTION,
-                    BotStates.WAITING_NICHE_CONFIRMATION
-                ]
-                
-                # Если пользователь не админ и не в процессе регистрации - проверяем подписку
-                if str(telegram_id) != ADMIN_CHAT_ID and state not in registration_states:
-                    access_info = await self.subscription_manager.check_user_access(telegram_id)
-                    if not access_info['has_access']:
-                        await self.subscription_manager.send_access_denied_message(telegram_id)
-                        return
-                
                 if state == BotStates.WAITING_EMAIL:
                     await self.handle_email_input(update, context, text)
                 elif state == BotStates.WAITING_NICHE_DESCRIPTION:
@@ -597,20 +544,6 @@ class TelegramBot:
                     parse_mode='HTML'
                 )
                 return
-            
-            # Проверяем подписку только для состояний после регистрации
-            registration_states = [
-                BotStates.WAITING_EMAIL,
-                BotStates.WAITING_NICHE_DESCRIPTION,
-                BotStates.WAITING_NICHE_CONFIRMATION
-            ]
-            
-            # Если пользователь не админ и не в процессе регистрации - проверяем подписку
-            if str(telegram_id) != ADMIN_CHAT_ID and state not in registration_states:
-                access_info = await self.subscription_manager.check_user_access(telegram_id)
-                if not access_info['has_access']:
-                    await self.subscription_manager.send_access_denied_message(telegram_id)
-                    return
             
             # Показываем сообщение о процессе обработки
             processing_message = await update.message.reply_text(
